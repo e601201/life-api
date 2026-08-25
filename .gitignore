@@ -1,0 +1,17 @@
+# バイナリ
+/bin/
+*.exe
+*.test
+*.out
+
+# 環境変数
+.env
+.env.*
+!.env.example
+
+# macOS
+.DS_Store
+
+# エディタ
+.idea/
+.vscode/
