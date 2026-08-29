@@ -1,0 +1,34 @@
+# ビルドコンテキストは丸ごと docker daemon に送られる。ビルドに要らないものを
+# 外しておくと、転送が速くなり、無関係なファイルの変更で COPY . . のキャッシュが
+# 落ちるのも防げる。
+#
+# 注意: gen/ は除外しない。ビルドステージで goa gen を回さずに済ませるため、
+# 生成コードはコンテキストに含める必要がある。
+
+# Git
+.git
+.gitignore
+.github
+
+# Docker 自身（COPY . . で入れる必要がない）
+Dockerfile
+.dockerignore
+
+# ドキュメント・ローカル開発用ツール
+README.md
+mise.toml
+
+# ビルド成果物
+/bin/
+*.exe
+*.test
+*.out
+
+# 環境変数（秘密情報をイメージに焼き込まない）
+.env
+.env.*
+
+# エディタ / OS
+.idea/
+.vscode/
+.DS_Store
