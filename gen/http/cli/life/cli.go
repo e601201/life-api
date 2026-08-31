@@ -12,7 +12,9 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strconv"
 
+	entriesc "github.com/e601201/life-api/gen/http/entries/client"
 	healthc "github.com/e601201/life-api/gen/http/health/client"
 	goahttp "goa.design/goa/v3/http"
 	goa "goa.design/goa/v3/pkg"
@@ -24,12 +26,14 @@ import (
 func UsageCommands() []string {
 	return []string{
 		"health check",
+		"entries (create|list|get|update|delete)",
 	}
 }
 
 // UsageExamples produces an example of a valid invocation of the CLI tool.
 func UsageExamples() string {
 	return os.Args[0] + " " + "health check" + "\n" +
+		os.Args[0] + " " + "entries create --body '{\n      \"body\": \"Temporibus neque cumque fuga sit quae esse.\",\n      \"created_at\": \"Est perferendis.\",\n      \"entry_date\": \"Excepturi illum.\",\n      \"id\": 3713054837053773390,\n      \"kind\": \"diary\",\n      \"title\": \"Earum aperiam.\",\n      \"updated_at\": \"Similique repellat occaecati.\",\n      \"user_id\": 4399518966327619297\n   }'" + "\n" +
 		""
 }
 
@@ -46,9 +50,33 @@ func ParseEndpoint(
 		healthFlags = flag.NewFlagSet("health", flag.ContinueOnError)
 
 		healthCheckFlags = flag.NewFlagSet("check", flag.ExitOnError)
+
+		entriesFlags = flag.NewFlagSet("entries", flag.ContinueOnError)
+
+		entriesCreateFlags    = flag.NewFlagSet("create", flag.ExitOnError)
+		entriesCreateBodyFlag = entriesCreateFlags.String("body", "REQUIRED", "")
+
+		entriesListFlags = flag.NewFlagSet("list", flag.ExitOnError)
+
+		entriesGetFlags = flag.NewFlagSet("get", flag.ExitOnError)
+		entriesGetPFlag = entriesGetFlags.String("p", "REQUIRED", "int64 is the payload type of the entries service get method.")
+
+		entriesUpdateFlags    = flag.NewFlagSet("update", flag.ExitOnError)
+		entriesUpdateBodyFlag = entriesUpdateFlags.String("body", "REQUIRED", "")
+		entriesUpdateIDFlag   = entriesUpdateFlags.String("id", "REQUIRED", "")
+
+		entriesDeleteFlags = flag.NewFlagSet("delete", flag.ExitOnError)
+		entriesDeletePFlag = entriesDeleteFlags.String("p", "REQUIRED", "int64 is the payload type of the entries service delete method.")
 	)
 	healthFlags.Usage = healthUsage
 	healthCheckFlags.Usage = healthCheckUsage
+
+	entriesFlags.Usage = entriesUsage
+	entriesCreateFlags.Usage = entriesCreateUsage
+	entriesListFlags.Usage = entriesListUsage
+	entriesGetFlags.Usage = entriesGetUsage
+	entriesUpdateFlags.Usage = entriesUpdateUsage
+	entriesDeleteFlags.Usage = entriesDeleteUsage
 
 	if err := flag.CommandLine.Parse(os.Args[1:]); err != nil {
 		return nil, nil, err
@@ -67,6 +95,8 @@ func ParseEndpoint(
 		switch svcn {
 		case "health":
 			svcf = healthFlags
+		case "entries":
+			svcf = entriesFlags
 		default:
 			return nil, nil, fmt.Errorf("unknown service %q", svcn)
 		}
@@ -86,6 +116,25 @@ func ParseEndpoint(
 			switch epn {
 			case "check":
 				epf = healthCheckFlags
+
+			}
+
+		case "entries":
+			switch epn {
+			case "create":
+				epf = entriesCreateFlags
+
+			case "list":
+				epf = entriesListFlags
+
+			case "get":
+				epf = entriesGetFlags
+
+			case "update":
+				epf = entriesUpdateFlags
+
+			case "delete":
+				epf = entriesDeleteFlags
 
 			}
 
@@ -114,6 +163,32 @@ func ParseEndpoint(
 			switch epn {
 			case "check":
 				endpoint = c.Check()
+			}
+		case "entries":
+			c := entriesc.NewClient(scheme, host, doer, enc, dec, restore)
+			switch epn {
+			case "create":
+				endpoint = c.Create()
+				data, err = entriesc.BuildCreatePayload(*entriesCreateBodyFlag)
+			case "list":
+				endpoint = c.List()
+			case "get":
+				endpoint = c.Get()
+				var err error
+				data, err = strconv.ParseInt(*entriesGetPFlag, 10, 64)
+				if err != nil {
+					return nil, nil, fmt.Errorf("invalid value for entriesGetPFlag, must be INT64")
+				}
+			case "update":
+				endpoint = c.Update()
+				data, err = entriesc.BuildUpdatePayload(*entriesUpdateBodyFlag, *entriesUpdateIDFlag)
+			case "delete":
+				endpoint = c.Delete()
+				var err error
+				data, err = strconv.ParseInt(*entriesDeletePFlag, 10, 64)
+				if err != nil {
+					return nil, nil, fmt.Errorf("invalid value for entriesDeletePFlag, must be INT64")
+				}
 			}
 		}
 	}
@@ -148,4 +223,108 @@ func healthCheckUsage() {
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, "Example:")
 	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "health check")
+}
+
+// entriesUsage displays the usage of the entries command and its subcommands.
+func entriesUsage() {
+	fmt.Fprintln(os.Stderr, `Journal entries service`)
+	fmt.Fprintf(os.Stderr, "Usage:\n    %s [globalflags] entries COMMAND [flags]\n\n", os.Args[0])
+	fmt.Fprintln(os.Stderr, "COMMAND:")
+	fmt.Fprintln(os.Stderr, `    create: Create a new journal entry`)
+	fmt.Fprintln(os.Stderr, `    list: List all journal entries`)
+	fmt.Fprintln(os.Stderr, `    get: Get a journal entry by ID`)
+	fmt.Fprintln(os.Stderr, `    update: Update a journal entry by ID`)
+	fmt.Fprintln(os.Stderr, `    delete: Delete a journal entry by ID`)
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, "Additional help:")
+	fmt.Fprintf(os.Stderr, "    %s entries COMMAND --help\n", os.Args[0])
+}
+func entriesCreateUsage() {
+	// Header with flags
+	fmt.Fprintf(os.Stderr, "%s [flags] entries create", os.Args[0])
+	fmt.Fprint(os.Stderr, " -body JSON")
+	fmt.Fprintln(os.Stderr)
+
+	// Description
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, `Create a new journal entry`)
+
+	// Flags list
+	fmt.Fprintln(os.Stderr, `    -body JSON: `)
+
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, "Example:")
+	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "entries create --body '{\n      \"body\": \"Temporibus neque cumque fuga sit quae esse.\",\n      \"created_at\": \"Est perferendis.\",\n      \"entry_date\": \"Excepturi illum.\",\n      \"id\": 3713054837053773390,\n      \"kind\": \"diary\",\n      \"title\": \"Earum aperiam.\",\n      \"updated_at\": \"Similique repellat occaecati.\",\n      \"user_id\": 4399518966327619297\n   }'")
+}
+
+func entriesListUsage() {
+	// Header with flags
+	fmt.Fprintf(os.Stderr, "%s [flags] entries list", os.Args[0])
+	fmt.Fprintln(os.Stderr)
+
+	// Description
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, `List all journal entries`)
+
+	// Flags list
+
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, "Example:")
+	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "entries list")
+}
+
+func entriesGetUsage() {
+	// Header with flags
+	fmt.Fprintf(os.Stderr, "%s [flags] entries get", os.Args[0])
+	fmt.Fprint(os.Stderr, " -p INT64")
+	fmt.Fprintln(os.Stderr)
+
+	// Description
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, `Get a journal entry by ID`)
+
+	// Flags list
+	fmt.Fprintln(os.Stderr, `    -p INT64: int64 is the payload type of the entries service get method.`)
+
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, "Example:")
+	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "entries get --p 5983056731733092241")
+}
+
+func entriesUpdateUsage() {
+	// Header with flags
+	fmt.Fprintf(os.Stderr, "%s [flags] entries update", os.Args[0])
+	fmt.Fprint(os.Stderr, " -body JSON")
+	fmt.Fprint(os.Stderr, " -id INT64")
+	fmt.Fprintln(os.Stderr)
+
+	// Description
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, `Update a journal entry by ID`)
+
+	// Flags list
+	fmt.Fprintln(os.Stderr, `    -body JSON: `)
+	fmt.Fprintln(os.Stderr, `    -id INT64: `)
+
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, "Example:")
+	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "entries update --body '{\n      \"body\": \"Natus maiores quasi.\",\n      \"created_at\": \"Quia molestias ut.\",\n      \"entry_date\": \"Ipsum ab veniam sint.\",\n      \"kind\": \"til\",\n      \"title\": \"Et eos dolor est.\",\n      \"updated_at\": \"Debitis praesentium alias reiciendis iste sequi.\",\n      \"user_id\": 4407808995897993796\n   }' --id 2155220371406235712")
+}
+
+func entriesDeleteUsage() {
+	// Header with flags
+	fmt.Fprintf(os.Stderr, "%s [flags] entries delete", os.Args[0])
+	fmt.Fprint(os.Stderr, " -p INT64")
+	fmt.Fprintln(os.Stderr)
+
+	// Description
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, `Delete a journal entry by ID`)
+
+	// Flags list
+	fmt.Fprintln(os.Stderr, `    -p INT64: int64 is the payload type of the entries service delete method.`)
+
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, "Example:")
+	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "entries delete --p 7300034495900556417")
 }

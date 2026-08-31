@@ -12,6 +12,140 @@ produces:
     - application/xml
     - application/gob
 paths:
+    /entries:
+        get:
+            tags:
+                - entries
+            summary: list entries
+            description: List all journal entries
+            operationId: entries#list
+            responses:
+                "200":
+                    description: OK response.
+                    schema:
+                        type: array
+                        items:
+                            $ref: '#/definitions/Journal'
+            schemes:
+                - http
+        post:
+            tags:
+                - entries
+            summary: create entries
+            description: Create a new journal entry
+            operationId: entries#create
+            parameters:
+                - name: CreateRequestBody
+                  in: body
+                  required: true
+                  schema:
+                    $ref: '#/definitions/Journal'
+                    required:
+                        - title
+                        - entry_date
+                        - kind
+            responses:
+                "201":
+                    description: Created response.
+                    schema:
+                        $ref: '#/definitions/Journal'
+                        required:
+                            - title
+                            - entry_date
+                            - kind
+            schemes:
+                - http
+    /entries/{id}:
+        get:
+            tags:
+                - entries
+            summary: get entries
+            description: Get a journal entry by ID
+            operationId: entries#get
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  type: integer
+                  format: int64
+            responses:
+                "200":
+                    description: OK response.
+                    schema:
+                        $ref: '#/definitions/Journal'
+                        required:
+                            - title
+                            - entry_date
+                            - kind
+                "404":
+                    description: Not Found response.
+                    schema:
+                        $ref: '#/definitions/Journal'
+                        required:
+                            - title
+                            - entry_date
+                            - kind
+            schemes:
+                - http
+        put:
+            tags:
+                - entries
+            summary: update entries
+            description: Update a journal entry by ID
+            operationId: entries#update
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  type: integer
+                  format: int64
+                - name: UpdateRequestBody
+                  in: body
+                  required: true
+                  schema:
+                    $ref: '#/definitions/Journal'
+                    required:
+                        - title
+                        - entry_date
+                        - kind
+            responses:
+                "200":
+                    description: OK response.
+                    schema:
+                        $ref: '#/definitions/Journal'
+                        required:
+                            - title
+                            - entry_date
+                            - kind
+                "404":
+                    description: Not Found response.
+                    schema:
+                        $ref: '#/definitions/Journal'
+                        required:
+                            - title
+                            - entry_date
+                            - kind
+            schemes:
+                - http
+        delete:
+            tags:
+                - entries
+            summary: delete entries
+            description: Delete a journal entry by ID
+            operationId: entries#delete
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  type: integer
+                  format: int64
+            responses:
+                "204":
+                    description: No Content response.
+                "404":
+                    description: Not Found response.
+            schemes:
+                - http
     /health:
         get:
             tags:
@@ -26,3 +160,51 @@ paths:
                         type: string
             schemes:
                 - http
+definitions:
+    Journal:
+        title: Journal
+        type: object
+        properties:
+            body:
+                type: string
+                example: Ut iste veniam mollitia.
+            created_at:
+                type: string
+                example: Enim velit iusto consequatur ut.
+            entry_date:
+                type: string
+                example: Expedita quo iure cumque.
+            id:
+                type: integer
+                example: 1587168276706967770
+                format: int64
+            kind:
+                type: string
+                example: til
+                enum:
+                    - til
+                    - diary
+            title:
+                type: string
+                example: Vel ullam porro quis consectetur.
+            updated_at:
+                type: string
+                example: Sint ut est a omnis accusamus magni.
+            user_id:
+                type: integer
+                example: 535544025447781906
+                format: int64
+        description: A journal entry
+        example:
+            body: Ut iste veniam mollitia.
+            created_at: Enim velit iusto consequatur ut.
+            entry_date: Expedita quo iure cumque.
+            id: 1587168276706967770
+            kind: til
+            title: Vel ullam porro quis consectetur.
+            updated_at: Sint ut est a omnis accusamus magni.
+            user_id: 535544025447781906
+        required:
+            - title
+            - entry_date
+            - kind
