@@ -23,9 +23,10 @@ import (
 // entries create endpoint.
 func EncodeCreateResponse(encoder func(context.Context, http.ResponseWriter) goahttp.Encoder) func(context.Context, http.ResponseWriter, any) error {
 	return func(ctx context.Context, w http.ResponseWriter, v any) error {
-		res, _ := v.(*entries.Journal)
+		res, _ := v.(*entries.CreateResult)
 		enc := encoder(ctx, w)
 		body := NewCreateResponseBody(res)
+		w.Header().Set("Location", res.Location)
 		w.WriteHeader(http.StatusCreated)
 		return enc.Encode(body)
 	}
@@ -33,9 +34,9 @@ func EncodeCreateResponse(encoder func(context.Context, http.ResponseWriter) goa
 
 // DecodeCreateRequest returns a decoder for requests sent to the entries
 // create endpoint.
-func DecodeCreateRequest(mux goahttp.Muxer, decoder func(*http.Request) goahttp.Decoder) func(*http.Request) (*entries.Journal, error) {
-	return func(r *http.Request) (*entries.Journal, error) {
-		var payload *entries.Journal
+func DecodeCreateRequest(mux goahttp.Muxer, decoder func(*http.Request) goahttp.Decoder) func(*http.Request) (*entries.EntryRequest, error) {
+	return func(r *http.Request) (*entries.EntryRequest, error) {
+		var payload *entries.EntryRequest
 		var (
 			body CreateRequestBody
 			err  error
@@ -55,7 +56,7 @@ func DecodeCreateRequest(mux goahttp.Muxer, decoder func(*http.Request) goahttp.
 		if err != nil {
 			return payload, err
 		}
-		payload = NewCreateJournal(&body)
+		payload = NewCreateEntryRequest(&body)
 
 		return payload, nil
 	}
@@ -87,9 +88,9 @@ func EncodeGetResponse(encoder func(context.Context, http.ResponseWriter) goahtt
 
 // DecodeGetRequest returns a decoder for requests sent to the entries get
 // endpoint.
-func DecodeGetRequest(mux goahttp.Muxer, decoder func(*http.Request) goahttp.Decoder) func(*http.Request) (int64, error) {
-	return func(r *http.Request) (int64, error) {
-		var payload int64
+func DecodeGetRequest(mux goahttp.Muxer, decoder func(*http.Request) goahttp.Decoder) func(*http.Request) (*entries.GetPayload, error) {
+	return func(r *http.Request) (*entries.GetPayload, error) {
+		var payload *entries.GetPayload
 		var (
 			id  int64
 			err error
@@ -107,7 +108,7 @@ func DecodeGetRequest(mux goahttp.Muxer, decoder func(*http.Request) goahttp.Dec
 		if err != nil {
 			return payload, err
 		}
-		payload = id
+		payload = NewGetPayload(id)
 
 		return payload, nil
 	}
@@ -156,9 +157,9 @@ func EncodeUpdateResponse(encoder func(context.Context, http.ResponseWriter) goa
 
 // DecodeUpdateRequest returns a decoder for requests sent to the entries
 // update endpoint.
-func DecodeUpdateRequest(mux goahttp.Muxer, decoder func(*http.Request) goahttp.Decoder) func(*http.Request) (*entries.Journal, error) {
-	return func(r *http.Request) (*entries.Journal, error) {
-		var payload *entries.Journal
+func DecodeUpdateRequest(mux goahttp.Muxer, decoder func(*http.Request) goahttp.Decoder) func(*http.Request) (*entries.UpdatePayload, error) {
+	return func(r *http.Request) (*entries.UpdatePayload, error) {
+		var payload *entries.UpdatePayload
 		var (
 			body UpdateRequestBody
 			err  error
@@ -195,7 +196,7 @@ func DecodeUpdateRequest(mux goahttp.Muxer, decoder func(*http.Request) goahttp.
 		if err != nil {
 			return payload, err
 		}
-		payload = NewUpdateJournal(&body, id)
+		payload = NewUpdatePayload(&body, id)
 
 		return payload, nil
 	}
@@ -241,9 +242,9 @@ func EncodeDeleteResponse(encoder func(context.Context, http.ResponseWriter) goa
 
 // DecodeDeleteRequest returns a decoder for requests sent to the entries
 // delete endpoint.
-func DecodeDeleteRequest(mux goahttp.Muxer, decoder func(*http.Request) goahttp.Decoder) func(*http.Request) (int64, error) {
-	return func(r *http.Request) (int64, error) {
-		var payload int64
+func DecodeDeleteRequest(mux goahttp.Muxer, decoder func(*http.Request) goahttp.Decoder) func(*http.Request) (*entries.DeletePayload, error) {
+	return func(r *http.Request) (*entries.DeletePayload, error) {
+		var payload *entries.DeletePayload
 		var (
 			id  int64
 			err error
@@ -261,7 +262,7 @@ func DecodeDeleteRequest(mux goahttp.Muxer, decoder func(*http.Request) goahttp.
 		if err != nil {
 			return payload, err
 		}
-		payload = id
+		payload = NewDeletePayload(id)
 
 		return payload, nil
 	}
@@ -301,13 +302,13 @@ func EncodeDeleteError(encoder func(context.Context, http.ResponseWriter) goahtt
 func marshalEntriesJournalToJournalResponse(v *entries.Journal) *JournalResponse {
 	res := &JournalResponse{
 		ID:        v.ID,
+		CreatedAt: v.CreatedAt,
+		UpdatedAt: v.UpdatedAt,
+		UserID:    v.UserID,
 		EntryDate: v.EntryDate,
 		Kind:      v.Kind,
 		Title:     v.Title,
 		Body:      v.Body,
-		CreatedAt: v.CreatedAt,
-		UpdatedAt: v.UpdatedAt,
-		UserID:    v.UserID,
 	}
 
 	return res

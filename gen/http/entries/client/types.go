@@ -8,6 +8,8 @@
 package client
 
 import (
+	"unicode/utf8"
+
 	entries "github.com/e601201/life-api/gen/entries"
 	goa "goa.design/goa/v3/pkg"
 )
@@ -15,65 +17,63 @@ import (
 // CreateRequestBody is the type of the "entries" service "create" endpoint
 // HTTP request body.
 type CreateRequestBody struct {
-	ID        *int64  `form:"id,omitempty" json:"id,omitempty" xml:"id,omitempty"`
+	// 記録日
 	EntryDate string  `form:"entry_date" json:"entry_date" xml:"entry_date"`
 	Kind      string  `form:"kind" json:"kind" xml:"kind"`
 	Title     string  `form:"title" json:"title" xml:"title"`
 	Body      *string `form:"body,omitempty" json:"body,omitempty" xml:"body,omitempty"`
-	CreatedAt *string `form:"created_at,omitempty" json:"created_at,omitempty" xml:"created_at,omitempty"`
-	UpdatedAt *string `form:"updated_at,omitempty" json:"updated_at,omitempty" xml:"updated_at,omitempty"`
-	UserID    *int64  `form:"user_id,omitempty" json:"user_id,omitempty" xml:"user_id,omitempty"`
 }
 
 // UpdateRequestBody is the type of the "entries" service "update" endpoint
 // HTTP request body.
 type UpdateRequestBody struct {
+	// 記録日
 	EntryDate string  `form:"entry_date" json:"entry_date" xml:"entry_date"`
 	Kind      string  `form:"kind" json:"kind" xml:"kind"`
 	Title     string  `form:"title" json:"title" xml:"title"`
 	Body      *string `form:"body,omitempty" json:"body,omitempty" xml:"body,omitempty"`
-	CreatedAt *string `form:"created_at,omitempty" json:"created_at,omitempty" xml:"created_at,omitempty"`
-	UpdatedAt *string `form:"updated_at,omitempty" json:"updated_at,omitempty" xml:"updated_at,omitempty"`
-	UserID    *int64  `form:"user_id,omitempty" json:"user_id,omitempty" xml:"user_id,omitempty"`
 }
 
 // CreateResponseBody is the type of the "entries" service "create" endpoint
 // HTTP response body.
 type CreateResponseBody struct {
 	ID        *int64  `form:"id,omitempty" json:"id,omitempty" xml:"id,omitempty"`
+	CreatedAt *string `form:"created_at,omitempty" json:"created_at,omitempty" xml:"created_at,omitempty"`
+	UpdatedAt *string `form:"updated_at,omitempty" json:"updated_at,omitempty" xml:"updated_at,omitempty"`
+	UserID    *int64  `form:"user_id,omitempty" json:"user_id,omitempty" xml:"user_id,omitempty"`
+	// 記録日
 	EntryDate *string `form:"entry_date,omitempty" json:"entry_date,omitempty" xml:"entry_date,omitempty"`
 	Kind      *string `form:"kind,omitempty" json:"kind,omitempty" xml:"kind,omitempty"`
 	Title     *string `form:"title,omitempty" json:"title,omitempty" xml:"title,omitempty"`
 	Body      *string `form:"body,omitempty" json:"body,omitempty" xml:"body,omitempty"`
-	CreatedAt *string `form:"created_at,omitempty" json:"created_at,omitempty" xml:"created_at,omitempty"`
-	UpdatedAt *string `form:"updated_at,omitempty" json:"updated_at,omitempty" xml:"updated_at,omitempty"`
-	UserID    *int64  `form:"user_id,omitempty" json:"user_id,omitempty" xml:"user_id,omitempty"`
 }
 
 // GetResponseBody is the type of the "entries" service "get" endpoint HTTP
 // response body.
 type GetResponseBody struct {
 	ID        *int64  `form:"id,omitempty" json:"id,omitempty" xml:"id,omitempty"`
+	CreatedAt *string `form:"created_at,omitempty" json:"created_at,omitempty" xml:"created_at,omitempty"`
+	UpdatedAt *string `form:"updated_at,omitempty" json:"updated_at,omitempty" xml:"updated_at,omitempty"`
+	UserID    *int64  `form:"user_id,omitempty" json:"user_id,omitempty" xml:"user_id,omitempty"`
+	// 記録日
 	EntryDate *string `form:"entry_date,omitempty" json:"entry_date,omitempty" xml:"entry_date,omitempty"`
 	Kind      *string `form:"kind,omitempty" json:"kind,omitempty" xml:"kind,omitempty"`
 	Title     *string `form:"title,omitempty" json:"title,omitempty" xml:"title,omitempty"`
 	Body      *string `form:"body,omitempty" json:"body,omitempty" xml:"body,omitempty"`
-	CreatedAt *string `form:"created_at,omitempty" json:"created_at,omitempty" xml:"created_at,omitempty"`
-	UpdatedAt *string `form:"updated_at,omitempty" json:"updated_at,omitempty" xml:"updated_at,omitempty"`
-	UserID    *int64  `form:"user_id,omitempty" json:"user_id,omitempty" xml:"user_id,omitempty"`
 }
 
 // UpdateResponseBody is the type of the "entries" service "update" endpoint
 // HTTP response body.
 type UpdateResponseBody struct {
 	ID        *int64  `form:"id,omitempty" json:"id,omitempty" xml:"id,omitempty"`
+	CreatedAt *string `form:"created_at,omitempty" json:"created_at,omitempty" xml:"created_at,omitempty"`
+	UpdatedAt *string `form:"updated_at,omitempty" json:"updated_at,omitempty" xml:"updated_at,omitempty"`
+	UserID    *int64  `form:"user_id,omitempty" json:"user_id,omitempty" xml:"user_id,omitempty"`
+	// 記録日
 	EntryDate *string `form:"entry_date,omitempty" json:"entry_date,omitempty" xml:"entry_date,omitempty"`
 	Kind      *string `form:"kind,omitempty" json:"kind,omitempty" xml:"kind,omitempty"`
 	Title     *string `form:"title,omitempty" json:"title,omitempty" xml:"title,omitempty"`
 	Body      *string `form:"body,omitempty" json:"body,omitempty" xml:"body,omitempty"`
-	CreatedAt *string `form:"created_at,omitempty" json:"created_at,omitempty" xml:"created_at,omitempty"`
-	UpdatedAt *string `form:"updated_at,omitempty" json:"updated_at,omitempty" xml:"updated_at,omitempty"`
-	UserID    *int64  `form:"user_id,omitempty" json:"user_id,omitempty" xml:"user_id,omitempty"`
 }
 
 // GetNotFoundResponseBody is the type of the "entries" service "get" endpoint
@@ -133,59 +133,54 @@ type DeleteNotFoundResponseBody struct {
 // JournalResponse is used to define fields on response body types.
 type JournalResponse struct {
 	ID        *int64  `form:"id,omitempty" json:"id,omitempty" xml:"id,omitempty"`
+	CreatedAt *string `form:"created_at,omitempty" json:"created_at,omitempty" xml:"created_at,omitempty"`
+	UpdatedAt *string `form:"updated_at,omitempty" json:"updated_at,omitempty" xml:"updated_at,omitempty"`
+	UserID    *int64  `form:"user_id,omitempty" json:"user_id,omitempty" xml:"user_id,omitempty"`
+	// 記録日
 	EntryDate *string `form:"entry_date,omitempty" json:"entry_date,omitempty" xml:"entry_date,omitempty"`
 	Kind      *string `form:"kind,omitempty" json:"kind,omitempty" xml:"kind,omitempty"`
 	Title     *string `form:"title,omitempty" json:"title,omitempty" xml:"title,omitempty"`
 	Body      *string `form:"body,omitempty" json:"body,omitempty" xml:"body,omitempty"`
-	CreatedAt *string `form:"created_at,omitempty" json:"created_at,omitempty" xml:"created_at,omitempty"`
-	UpdatedAt *string `form:"updated_at,omitempty" json:"updated_at,omitempty" xml:"updated_at,omitempty"`
-	UserID    *int64  `form:"user_id,omitempty" json:"user_id,omitempty" xml:"user_id,omitempty"`
 }
 
 // NewCreateRequestBody builds the HTTP request body from the payload of the
 // "create" endpoint of the "entries" service.
-func NewCreateRequestBody(p *entries.Journal) *CreateRequestBody {
+func NewCreateRequestBody(p *entries.EntryRequest) *CreateRequestBody {
 	body := &CreateRequestBody{
-		ID:        p.ID,
 		EntryDate: p.EntryDate,
 		Kind:      p.Kind,
 		Title:     p.Title,
 		Body:      p.Body,
-		CreatedAt: p.CreatedAt,
-		UpdatedAt: p.UpdatedAt,
-		UserID:    p.UserID,
 	}
 	return body
 }
 
 // NewUpdateRequestBody builds the HTTP request body from the payload of the
 // "update" endpoint of the "entries" service.
-func NewUpdateRequestBody(p *entries.Journal) *UpdateRequestBody {
+func NewUpdateRequestBody(p *entries.UpdatePayload) *UpdateRequestBody {
 	body := &UpdateRequestBody{
 		EntryDate: p.EntryDate,
 		Kind:      p.Kind,
 		Title:     p.Title,
 		Body:      p.Body,
-		CreatedAt: p.CreatedAt,
-		UpdatedAt: p.UpdatedAt,
-		UserID:    p.UserID,
 	}
 	return body
 }
 
-// NewCreateJournalCreated builds a "entries" service "create" endpoint result
+// NewCreateResultCreated builds a "entries" service "create" endpoint result
 // from a HTTP "Created" response.
-func NewCreateJournalCreated(body *CreateResponseBody) *entries.Journal {
-	v := &entries.Journal{
+func NewCreateResultCreated(body *CreateResponseBody, location string) *entries.CreateResult {
+	v := &entries.CreateResult{
 		ID:        body.ID,
+		CreatedAt: body.CreatedAt,
+		UpdatedAt: body.UpdatedAt,
+		UserID:    body.UserID,
 		EntryDate: *body.EntryDate,
 		Kind:      *body.Kind,
 		Title:     *body.Title,
 		Body:      body.Body,
-		CreatedAt: body.CreatedAt,
-		UpdatedAt: body.UpdatedAt,
-		UserID:    body.UserID,
 	}
+	v.Location = location
 
 	return v
 }
@@ -210,13 +205,13 @@ func NewListJournalOK(body []*JournalResponse) []*entries.Journal {
 func NewGetJournalOK(body *GetResponseBody) *entries.Journal {
 	v := &entries.Journal{
 		ID:        body.ID,
+		CreatedAt: body.CreatedAt,
+		UpdatedAt: body.UpdatedAt,
+		UserID:    body.UserID,
 		EntryDate: *body.EntryDate,
 		Kind:      *body.Kind,
 		Title:     *body.Title,
 		Body:      body.Body,
-		CreatedAt: body.CreatedAt,
-		UpdatedAt: body.UpdatedAt,
-		UserID:    body.UserID,
 	}
 
 	return v
@@ -241,13 +236,13 @@ func NewGetNotFound(body *GetNotFoundResponseBody) *goa.ServiceError {
 func NewUpdateJournalOK(body *UpdateResponseBody) *entries.Journal {
 	v := &entries.Journal{
 		ID:        body.ID,
+		CreatedAt: body.CreatedAt,
+		UpdatedAt: body.UpdatedAt,
+		UserID:    body.UserID,
 		EntryDate: *body.EntryDate,
 		Kind:      *body.Kind,
 		Title:     *body.Title,
 		Body:      body.Body,
-		CreatedAt: body.CreatedAt,
-		UpdatedAt: body.UpdatedAt,
-		UserID:    body.UserID,
 	}
 
 	return v
@@ -292,9 +287,23 @@ func ValidateCreateResponseBody(body *CreateResponseBody) (err error) {
 	if body.Kind == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("kind", "body"))
 	}
+	if body.CreatedAt != nil {
+		err = goa.MergeErrors(err, goa.ValidateFormat("body.created_at", *body.CreatedAt, goa.FormatDateTime))
+	}
+	if body.UpdatedAt != nil {
+		err = goa.MergeErrors(err, goa.ValidateFormat("body.updated_at", *body.UpdatedAt, goa.FormatDateTime))
+	}
+	if body.EntryDate != nil {
+		err = goa.MergeErrors(err, goa.ValidateFormat("body.entry_date", *body.EntryDate, goa.FormatDate))
+	}
 	if body.Kind != nil {
 		if !(*body.Kind == "til" || *body.Kind == "diary") {
 			err = goa.MergeErrors(err, goa.InvalidEnumValueError("body.kind", *body.Kind, []any{"til", "diary"}))
+		}
+	}
+	if body.Title != nil {
+		if utf8.RuneCountInString(*body.Title) < 1 {
+			err = goa.MergeErrors(err, goa.InvalidLengthError("body.title", *body.Title, utf8.RuneCountInString(*body.Title), 1, true))
 		}
 	}
 	return
@@ -311,9 +320,23 @@ func ValidateGetResponseBody(body *GetResponseBody) (err error) {
 	if body.Kind == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("kind", "body"))
 	}
+	if body.CreatedAt != nil {
+		err = goa.MergeErrors(err, goa.ValidateFormat("body.created_at", *body.CreatedAt, goa.FormatDateTime))
+	}
+	if body.UpdatedAt != nil {
+		err = goa.MergeErrors(err, goa.ValidateFormat("body.updated_at", *body.UpdatedAt, goa.FormatDateTime))
+	}
+	if body.EntryDate != nil {
+		err = goa.MergeErrors(err, goa.ValidateFormat("body.entry_date", *body.EntryDate, goa.FormatDate))
+	}
 	if body.Kind != nil {
 		if !(*body.Kind == "til" || *body.Kind == "diary") {
 			err = goa.MergeErrors(err, goa.InvalidEnumValueError("body.kind", *body.Kind, []any{"til", "diary"}))
+		}
+	}
+	if body.Title != nil {
+		if utf8.RuneCountInString(*body.Title) < 1 {
+			err = goa.MergeErrors(err, goa.InvalidLengthError("body.title", *body.Title, utf8.RuneCountInString(*body.Title), 1, true))
 		}
 	}
 	return
@@ -330,9 +353,23 @@ func ValidateUpdateResponseBody(body *UpdateResponseBody) (err error) {
 	if body.Kind == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("kind", "body"))
 	}
+	if body.CreatedAt != nil {
+		err = goa.MergeErrors(err, goa.ValidateFormat("body.created_at", *body.CreatedAt, goa.FormatDateTime))
+	}
+	if body.UpdatedAt != nil {
+		err = goa.MergeErrors(err, goa.ValidateFormat("body.updated_at", *body.UpdatedAt, goa.FormatDateTime))
+	}
+	if body.EntryDate != nil {
+		err = goa.MergeErrors(err, goa.ValidateFormat("body.entry_date", *body.EntryDate, goa.FormatDate))
+	}
 	if body.Kind != nil {
 		if !(*body.Kind == "til" || *body.Kind == "diary") {
 			err = goa.MergeErrors(err, goa.InvalidEnumValueError("body.kind", *body.Kind, []any{"til", "diary"}))
+		}
+	}
+	if body.Title != nil {
+		if utf8.RuneCountInString(*body.Title) < 1 {
+			err = goa.MergeErrors(err, goa.InvalidLengthError("body.title", *body.Title, utf8.RuneCountInString(*body.Title), 1, true))
 		}
 	}
 	return
@@ -421,9 +458,23 @@ func ValidateJournalResponse(body *JournalResponse) (err error) {
 	if body.Kind == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("kind", "body"))
 	}
+	if body.CreatedAt != nil {
+		err = goa.MergeErrors(err, goa.ValidateFormat("body.created_at", *body.CreatedAt, goa.FormatDateTime))
+	}
+	if body.UpdatedAt != nil {
+		err = goa.MergeErrors(err, goa.ValidateFormat("body.updated_at", *body.UpdatedAt, goa.FormatDateTime))
+	}
+	if body.EntryDate != nil {
+		err = goa.MergeErrors(err, goa.ValidateFormat("body.entry_date", *body.EntryDate, goa.FormatDate))
+	}
 	if body.Kind != nil {
 		if !(*body.Kind == "til" || *body.Kind == "diary") {
 			err = goa.MergeErrors(err, goa.InvalidEnumValueError("body.kind", *body.Kind, []any{"til", "diary"}))
+		}
+	}
+	if body.Title != nil {
+		if utf8.RuneCountInString(*body.Title) < 1 {
+			err = goa.MergeErrors(err, goa.InvalidLengthError("body.title", *body.Title, utf8.RuneCountInString(*body.Title), 1, true))
 		}
 	}
 	return

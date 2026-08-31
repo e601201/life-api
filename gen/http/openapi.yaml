@@ -39,7 +39,7 @@ paths:
                   in: body
                   required: true
                   schema:
-                    $ref: '#/definitions/Journal'
+                    $ref: '#/definitions/EntryRequest'
                     required:
                         - title
                         - entry_date
@@ -48,11 +48,15 @@ paths:
                 "201":
                     description: Created response.
                     schema:
-                        $ref: '#/definitions/Journal'
+                        $ref: '#/definitions/EntriesCreateResponseBody'
                         required:
                             - title
                             - entry_date
                             - kind
+                    headers:
+                        Location:
+                            description: 作成されたリソースのパス
+                            type: string
             schemes:
                 - http
     /entries/{id}:
@@ -65,6 +69,7 @@ paths:
             parameters:
                 - name: id
                   in: path
+                  description: Entry ID
                   required: true
                   type: integer
                   format: int64
@@ -92,6 +97,7 @@ paths:
             parameters:
                 - name: id
                   in: path
+                  description: Entry ID
                   required: true
                   type: integer
                   format: int64
@@ -99,7 +105,7 @@ paths:
                   in: body
                   required: true
                   schema:
-                    $ref: '#/definitions/Journal'
+                    $ref: '#/definitions/EntriesUpdateRequestBody'
                     required:
                         - title
                         - entry_date
@@ -128,6 +134,7 @@ paths:
             parameters:
                 - name: id
                   in: path
+                  description: Entry ID
                   required: true
                   type: integer
                   format: int64
@@ -155,6 +162,57 @@ paths:
             schemes:
                 - http
 definitions:
+    EntriesCreateResponseBody:
+        title: EntriesCreateResponseBody
+        type: object
+        properties:
+            body:
+                type: string
+                example: Ut iste veniam mollitia.
+            created_at:
+                type: string
+                example: "1990-06-20T15:39:26Z"
+                format: date-time
+            entry_date:
+                type: string
+                description: 記録日
+                example: "1970-02-24"
+                format: date
+            id:
+                type: integer
+                example: 1587168276706967770
+                format: int64
+            kind:
+                type: string
+                example: til
+                enum:
+                    - til
+                    - diary
+            title:
+                type: string
+                example: ri
+                minLength: 1
+            updated_at:
+                type: string
+                example: "2011-10-20T03:00:30Z"
+                format: date-time
+            user_id:
+                type: integer
+                example: 535544025447781906
+                format: int64
+        example:
+            body: Ut iste veniam mollitia.
+            created_at: "1990-06-20T15:39:26Z"
+            entry_date: "1970-02-24"
+            id: 1587168276706967770
+            kind: til
+            title: ri
+            updated_at: "2011-10-20T03:00:30Z"
+            user_id: 535544025447781906
+        required:
+            - title
+            - entry_date
+            - kind
     EntriesDeleteNotFoundResponseBody:
         title: 'Mediatype identifier: application/vnd.goa.error; view=default'
         type: object
@@ -284,22 +342,87 @@ definitions:
             - temporary
             - timeout
             - fault
+    EntriesUpdateRequestBody:
+        title: EntriesUpdateRequestBody
+        type: object
+        properties:
+            body:
+                type: string
+                example: Natus maiores quasi.
+            entry_date:
+                type: string
+                description: 記録日
+                example: "1998-12-26"
+                format: date
+            kind:
+                type: string
+                example: til
+                enum:
+                    - til
+                    - diary
+            title:
+                type: string
+                example: r
+                minLength: 1
+        example:
+            body: Natus maiores quasi.
+            entry_date: "1998-12-26"
+            kind: til
+            title: r
+        required:
+            - title
+            - entry_date
+            - kind
+    EntryRequest:
+        title: EntryRequest
+        type: object
+        properties:
+            body:
+                type: string
+                example: Temporibus neque cumque fuga sit quae esse.
+            entry_date:
+                type: string
+                description: 記録日
+                example: "1994-04-12"
+                format: date
+            kind:
+                type: string
+                example: diary
+                enum:
+                    - til
+                    - diary
+            title:
+                type: string
+                example: u
+                minLength: 1
+        example:
+            body: Temporibus neque cumque fuga sit quae esse.
+            entry_date: "1994-04-12"
+            kind: diary
+            title: u
+        required:
+            - title
+            - entry_date
+            - kind
     Journal:
         title: Journal
         type: object
         properties:
             body:
                 type: string
-                example: Ut iste veniam mollitia.
+                example: Est ut omnis voluptates omnis et neque.
             created_at:
                 type: string
-                example: Enim velit iusto consequatur ut.
+                example: "1990-12-09T12:52:10Z"
+                format: date-time
             entry_date:
                 type: string
-                example: Expedita quo iure cumque.
+                description: 記録日
+                example: "1987-08-29"
+                format: date
             id:
                 type: integer
-                example: 1587168276706967770
+                example: 3312195076812813890
                 format: int64
             kind:
                 type: string
@@ -309,24 +432,26 @@ definitions:
                     - diary
             title:
                 type: string
-                example: Vel ullam porro quis consectetur.
+                example: j
+                minLength: 1
             updated_at:
                 type: string
-                example: Sint ut est a omnis accusamus magni.
+                example: "2004-10-20T00:36:43Z"
+                format: date-time
             user_id:
                 type: integer
-                example: 535544025447781906
+                example: 8220775752495052168
                 format: int64
         description: A journal entry
         example:
-            body: Ut iste veniam mollitia.
-            created_at: Enim velit iusto consequatur ut.
-            entry_date: Expedita quo iure cumque.
-            id: 1587168276706967770
+            body: Est ut omnis voluptates omnis et neque.
+            created_at: "1990-12-09T12:52:10Z"
+            entry_date: "1987-08-29"
+            id: 3312195076812813890
             kind: til
-            title: Vel ullam porro quis consectetur.
-            updated_at: Sint ut est a omnis accusamus magni.
-            user_id: 535544025447781906
+            title: j
+            updated_at: "2004-10-20T00:36:43Z"
+            user_id: 8220775752495052168
         required:
             - title
             - entry_date

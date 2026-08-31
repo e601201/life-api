@@ -8,6 +8,8 @@
 package server
 
 import (
+	"unicode/utf8"
+
 	entries "github.com/e601201/life-api/gen/entries"
 	goa "goa.design/goa/v3/pkg"
 )
@@ -15,39 +17,35 @@ import (
 // CreateRequestBody is the type of the "entries" service "create" endpoint
 // HTTP request body.
 type CreateRequestBody struct {
-	ID        *int64  `form:"id,omitempty" json:"id,omitempty" xml:"id,omitempty"`
+	// 記録日
 	EntryDate *string `form:"entry_date,omitempty" json:"entry_date,omitempty" xml:"entry_date,omitempty"`
 	Kind      *string `form:"kind,omitempty" json:"kind,omitempty" xml:"kind,omitempty"`
 	Title     *string `form:"title,omitempty" json:"title,omitempty" xml:"title,omitempty"`
 	Body      *string `form:"body,omitempty" json:"body,omitempty" xml:"body,omitempty"`
-	CreatedAt *string `form:"created_at,omitempty" json:"created_at,omitempty" xml:"created_at,omitempty"`
-	UpdatedAt *string `form:"updated_at,omitempty" json:"updated_at,omitempty" xml:"updated_at,omitempty"`
-	UserID    *int64  `form:"user_id,omitempty" json:"user_id,omitempty" xml:"user_id,omitempty"`
 }
 
 // UpdateRequestBody is the type of the "entries" service "update" endpoint
 // HTTP request body.
 type UpdateRequestBody struct {
+	// 記録日
 	EntryDate *string `form:"entry_date,omitempty" json:"entry_date,omitempty" xml:"entry_date,omitempty"`
 	Kind      *string `form:"kind,omitempty" json:"kind,omitempty" xml:"kind,omitempty"`
 	Title     *string `form:"title,omitempty" json:"title,omitempty" xml:"title,omitempty"`
 	Body      *string `form:"body,omitempty" json:"body,omitempty" xml:"body,omitempty"`
-	CreatedAt *string `form:"created_at,omitempty" json:"created_at,omitempty" xml:"created_at,omitempty"`
-	UpdatedAt *string `form:"updated_at,omitempty" json:"updated_at,omitempty" xml:"updated_at,omitempty"`
-	UserID    *int64  `form:"user_id,omitempty" json:"user_id,omitempty" xml:"user_id,omitempty"`
 }
 
 // CreateResponseBody is the type of the "entries" service "create" endpoint
 // HTTP response body.
 type CreateResponseBody struct {
 	ID        *int64  `form:"id,omitempty" json:"id,omitempty" xml:"id,omitempty"`
+	CreatedAt *string `form:"created_at,omitempty" json:"created_at,omitempty" xml:"created_at,omitempty"`
+	UpdatedAt *string `form:"updated_at,omitempty" json:"updated_at,omitempty" xml:"updated_at,omitempty"`
+	UserID    *int64  `form:"user_id,omitempty" json:"user_id,omitempty" xml:"user_id,omitempty"`
+	// 記録日
 	EntryDate string  `form:"entry_date" json:"entry_date" xml:"entry_date"`
 	Kind      string  `form:"kind" json:"kind" xml:"kind"`
 	Title     string  `form:"title" json:"title" xml:"title"`
 	Body      *string `form:"body,omitempty" json:"body,omitempty" xml:"body,omitempty"`
-	CreatedAt *string `form:"created_at,omitempty" json:"created_at,omitempty" xml:"created_at,omitempty"`
-	UpdatedAt *string `form:"updated_at,omitempty" json:"updated_at,omitempty" xml:"updated_at,omitempty"`
-	UserID    *int64  `form:"user_id,omitempty" json:"user_id,omitempty" xml:"user_id,omitempty"`
 }
 
 // ListResponseBody is the type of the "entries" service "list" endpoint HTTP
@@ -58,26 +56,28 @@ type ListResponseBody []*JournalResponse
 // response body.
 type GetResponseBody struct {
 	ID        *int64  `form:"id,omitempty" json:"id,omitempty" xml:"id,omitempty"`
+	CreatedAt *string `form:"created_at,omitempty" json:"created_at,omitempty" xml:"created_at,omitempty"`
+	UpdatedAt *string `form:"updated_at,omitempty" json:"updated_at,omitempty" xml:"updated_at,omitempty"`
+	UserID    *int64  `form:"user_id,omitempty" json:"user_id,omitempty" xml:"user_id,omitempty"`
+	// 記録日
 	EntryDate string  `form:"entry_date" json:"entry_date" xml:"entry_date"`
 	Kind      string  `form:"kind" json:"kind" xml:"kind"`
 	Title     string  `form:"title" json:"title" xml:"title"`
 	Body      *string `form:"body,omitempty" json:"body,omitempty" xml:"body,omitempty"`
-	CreatedAt *string `form:"created_at,omitempty" json:"created_at,omitempty" xml:"created_at,omitempty"`
-	UpdatedAt *string `form:"updated_at,omitempty" json:"updated_at,omitempty" xml:"updated_at,omitempty"`
-	UserID    *int64  `form:"user_id,omitempty" json:"user_id,omitempty" xml:"user_id,omitempty"`
 }
 
 // UpdateResponseBody is the type of the "entries" service "update" endpoint
 // HTTP response body.
 type UpdateResponseBody struct {
 	ID        *int64  `form:"id,omitempty" json:"id,omitempty" xml:"id,omitempty"`
+	CreatedAt *string `form:"created_at,omitempty" json:"created_at,omitempty" xml:"created_at,omitempty"`
+	UpdatedAt *string `form:"updated_at,omitempty" json:"updated_at,omitempty" xml:"updated_at,omitempty"`
+	UserID    *int64  `form:"user_id,omitempty" json:"user_id,omitempty" xml:"user_id,omitempty"`
+	// 記録日
 	EntryDate string  `form:"entry_date" json:"entry_date" xml:"entry_date"`
 	Kind      string  `form:"kind" json:"kind" xml:"kind"`
 	Title     string  `form:"title" json:"title" xml:"title"`
 	Body      *string `form:"body,omitempty" json:"body,omitempty" xml:"body,omitempty"`
-	CreatedAt *string `form:"created_at,omitempty" json:"created_at,omitempty" xml:"created_at,omitempty"`
-	UpdatedAt *string `form:"updated_at,omitempty" json:"updated_at,omitempty" xml:"updated_at,omitempty"`
-	UserID    *int64  `form:"user_id,omitempty" json:"user_id,omitempty" xml:"user_id,omitempty"`
 }
 
 // GetNotFoundResponseBody is the type of the "entries" service "get" endpoint
@@ -137,27 +137,28 @@ type DeleteNotFoundResponseBody struct {
 // JournalResponse is used to define fields on response body types.
 type JournalResponse struct {
 	ID        *int64  `form:"id,omitempty" json:"id,omitempty" xml:"id,omitempty"`
+	CreatedAt *string `form:"created_at,omitempty" json:"created_at,omitempty" xml:"created_at,omitempty"`
+	UpdatedAt *string `form:"updated_at,omitempty" json:"updated_at,omitempty" xml:"updated_at,omitempty"`
+	UserID    *int64  `form:"user_id,omitempty" json:"user_id,omitempty" xml:"user_id,omitempty"`
+	// 記録日
 	EntryDate string  `form:"entry_date" json:"entry_date" xml:"entry_date"`
 	Kind      string  `form:"kind" json:"kind" xml:"kind"`
 	Title     string  `form:"title" json:"title" xml:"title"`
 	Body      *string `form:"body,omitempty" json:"body,omitempty" xml:"body,omitempty"`
-	CreatedAt *string `form:"created_at,omitempty" json:"created_at,omitempty" xml:"created_at,omitempty"`
-	UpdatedAt *string `form:"updated_at,omitempty" json:"updated_at,omitempty" xml:"updated_at,omitempty"`
-	UserID    *int64  `form:"user_id,omitempty" json:"user_id,omitempty" xml:"user_id,omitempty"`
 }
 
 // NewCreateResponseBody builds the HTTP response body from the result of the
 // "create" endpoint of the "entries" service.
-func NewCreateResponseBody(res *entries.Journal) *CreateResponseBody {
+func NewCreateResponseBody(res *entries.CreateResult) *CreateResponseBody {
 	body := &CreateResponseBody{
 		ID:        res.ID,
+		CreatedAt: res.CreatedAt,
+		UpdatedAt: res.UpdatedAt,
+		UserID:    res.UserID,
 		EntryDate: res.EntryDate,
 		Kind:      res.Kind,
 		Title:     res.Title,
 		Body:      res.Body,
-		CreatedAt: res.CreatedAt,
-		UpdatedAt: res.UpdatedAt,
-		UserID:    res.UserID,
 	}
 	return body
 }
@@ -181,13 +182,13 @@ func NewListResponseBody(res []*entries.Journal) ListResponseBody {
 func NewGetResponseBody(res *entries.Journal) *GetResponseBody {
 	body := &GetResponseBody{
 		ID:        res.ID,
+		CreatedAt: res.CreatedAt,
+		UpdatedAt: res.UpdatedAt,
+		UserID:    res.UserID,
 		EntryDate: res.EntryDate,
 		Kind:      res.Kind,
 		Title:     res.Title,
 		Body:      res.Body,
-		CreatedAt: res.CreatedAt,
-		UpdatedAt: res.UpdatedAt,
-		UserID:    res.UserID,
 	}
 	return body
 }
@@ -197,13 +198,13 @@ func NewGetResponseBody(res *entries.Journal) *GetResponseBody {
 func NewUpdateResponseBody(res *entries.Journal) *UpdateResponseBody {
 	body := &UpdateResponseBody{
 		ID:        res.ID,
+		CreatedAt: res.CreatedAt,
+		UpdatedAt: res.UpdatedAt,
+		UserID:    res.UserID,
 		EntryDate: res.EntryDate,
 		Kind:      res.Kind,
 		Title:     res.Title,
 		Body:      res.Body,
-		CreatedAt: res.CreatedAt,
-		UpdatedAt: res.UpdatedAt,
-		UserID:    res.UserID,
 	}
 	return body
 }
@@ -250,34 +251,43 @@ func NewDeleteNotFoundResponseBody(res *goa.ServiceError) *DeleteNotFoundRespons
 	return body
 }
 
-// NewCreateJournal builds a entries service create endpoint payload.
-func NewCreateJournal(body *CreateRequestBody) *entries.Journal {
-	v := &entries.Journal{
-		ID:        body.ID,
+// NewCreateEntryRequest builds a entries service create endpoint payload.
+func NewCreateEntryRequest(body *CreateRequestBody) *entries.EntryRequest {
+	v := &entries.EntryRequest{
 		EntryDate: *body.EntryDate,
 		Kind:      *body.Kind,
 		Title:     *body.Title,
 		Body:      body.Body,
-		CreatedAt: body.CreatedAt,
-		UpdatedAt: body.UpdatedAt,
-		UserID:    body.UserID,
 	}
 
 	return v
 }
 
-// NewUpdateJournal builds a entries service update endpoint payload.
-func NewUpdateJournal(body *UpdateRequestBody, id int64) *entries.Journal {
-	v := &entries.Journal{
+// NewGetPayload builds a entries service get endpoint payload.
+func NewGetPayload(id int64) *entries.GetPayload {
+	v := &entries.GetPayload{}
+	v.ID = id
+
+	return v
+}
+
+// NewUpdatePayload builds a entries service update endpoint payload.
+func NewUpdatePayload(body *UpdateRequestBody, id int64) *entries.UpdatePayload {
+	v := &entries.UpdatePayload{
 		EntryDate: *body.EntryDate,
 		Kind:      *body.Kind,
 		Title:     *body.Title,
 		Body:      body.Body,
-		CreatedAt: body.CreatedAt,
-		UpdatedAt: body.UpdatedAt,
-		UserID:    body.UserID,
 	}
-	v.ID = &id
+	v.ID = id
+
+	return v
+}
+
+// NewDeletePayload builds a entries service delete endpoint payload.
+func NewDeletePayload(id int64) *entries.DeletePayload {
+	v := &entries.DeletePayload{}
+	v.ID = id
 
 	return v
 }
@@ -293,9 +303,17 @@ func ValidateCreateRequestBody(body *CreateRequestBody) (err error) {
 	if body.Kind == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("kind", "body"))
 	}
+	if body.EntryDate != nil {
+		err = goa.MergeErrors(err, goa.ValidateFormat("body.entry_date", *body.EntryDate, goa.FormatDate))
+	}
 	if body.Kind != nil {
 		if !(*body.Kind == "til" || *body.Kind == "diary") {
 			err = goa.MergeErrors(err, goa.InvalidEnumValueError("body.kind", *body.Kind, []any{"til", "diary"}))
+		}
+	}
+	if body.Title != nil {
+		if utf8.RuneCountInString(*body.Title) < 1 {
+			err = goa.MergeErrors(err, goa.InvalidLengthError("body.title", *body.Title, utf8.RuneCountInString(*body.Title), 1, true))
 		}
 	}
 	return
@@ -312,9 +330,17 @@ func ValidateUpdateRequestBody(body *UpdateRequestBody) (err error) {
 	if body.Kind == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("kind", "body"))
 	}
+	if body.EntryDate != nil {
+		err = goa.MergeErrors(err, goa.ValidateFormat("body.entry_date", *body.EntryDate, goa.FormatDate))
+	}
 	if body.Kind != nil {
 		if !(*body.Kind == "til" || *body.Kind == "diary") {
 			err = goa.MergeErrors(err, goa.InvalidEnumValueError("body.kind", *body.Kind, []any{"til", "diary"}))
+		}
+	}
+	if body.Title != nil {
+		if utf8.RuneCountInString(*body.Title) < 1 {
+			err = goa.MergeErrors(err, goa.InvalidLengthError("body.title", *body.Title, utf8.RuneCountInString(*body.Title), 1, true))
 		}
 	}
 	return

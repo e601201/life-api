@@ -46,7 +46,7 @@ func (e *Endpoints) Use(m func(goa.Endpoint) goa.Endpoint) {
 // "create" of service "entries".
 func NewCreateEndpoint(s Service) goa.Endpoint {
 	return func(ctx context.Context, req any) (any, error) {
-		p := req.(*Journal)
+		p := req.(*EntryRequest)
 		return s.Create(ctx, p)
 	}
 }
@@ -63,7 +63,7 @@ func NewListEndpoint(s Service) goa.Endpoint {
 // service "entries".
 func NewGetEndpoint(s Service) goa.Endpoint {
 	return func(ctx context.Context, req any) (any, error) {
-		p := req.(int64)
+		p := req.(*GetPayload)
 		return s.Get(ctx, p)
 	}
 }
@@ -72,7 +72,7 @@ func NewGetEndpoint(s Service) goa.Endpoint {
 // "update" of service "entries".
 func NewUpdateEndpoint(s Service) goa.Endpoint {
 	return func(ctx context.Context, req any) (any, error) {
-		p := req.(*Journal)
+		p := req.(*UpdatePayload)
 		return s.Update(ctx, p)
 	}
 }
@@ -81,7 +81,7 @@ func NewUpdateEndpoint(s Service) goa.Endpoint {
 // "delete" of service "entries".
 func NewDeleteEndpoint(s Service) goa.Endpoint {
 	return func(ctx context.Context, req any) (any, error) {
-		p := req.(int64)
+		p := req.(*DeletePayload)
 		return nil, s.Delete(ctx, p)
 	}
 }

@@ -38,9 +38,9 @@ func (c *Client) BuildCreateRequest(ctx context.Context, v any) (*http.Request, 
 // create server.
 func EncodeCreateRequest(encoder func(*http.Request) goahttp.Encoder) func(*http.Request, any) error {
 	return func(req *http.Request, v any) error {
-		p, ok := v.(*entries.Journal)
+		p, ok := v.(*entries.EntryRequest)
 		if !ok {
-			return goahttp.ErrInvalidType("entries", "create", "*entries.Journal", v)
+			return goahttp.ErrInvalidType("entries", "create", "*entries.EntryRequest", v)
 		}
 		body := NewCreateRequestBody(p)
 		if err := encoder(req).Encode(&body); err != nil {
@@ -81,7 +81,18 @@ func DecodeCreateResponse(decoder func(*http.Response) goahttp.Decoder, restoreB
 			if err != nil {
 				return nil, goahttp.ErrValidationError("entries", "create", err)
 			}
-			res := NewCreateJournalCreated(&body)
+			var (
+				location string
+			)
+			locationRaw := resp.Header.Get("Location")
+			if locationRaw == "" {
+				err = goa.MergeErrors(err, goa.MissingFieldError("location", "header"))
+			}
+			location = locationRaw
+			if err != nil {
+				return nil, goahttp.ErrValidationError("entries", "create", err)
+			}
+			res := NewCreateResultCreated(&body, location)
 			return res, nil
 		default:
 			body, _ := io.ReadAll(resp.Body)
@@ -158,11 +169,11 @@ func (c *Client) BuildGetRequest(ctx context.Context, v any) (*http.Request, err
 		id int64
 	)
 	{
-		p, ok := v.(int64)
+		p, ok := v.(*entries.GetPayload)
 		if !ok {
-			return nil, goahttp.ErrInvalidType("entries", "get", "int64", v)
+			return nil, goahttp.ErrInvalidType("entries", "get", "*entries.GetPayload", v)
 		}
-		id = p
+		id = p.ID
 	}
 	u := &url.URL{Scheme: c.scheme, Host: c.host, Path: GetEntriesPath(id)}
 	req, err := http.NewRequest("GET", u.String(), nil)
@@ -240,13 +251,11 @@ func (c *Client) BuildUpdateRequest(ctx context.Context, v any) (*http.Request, 
 		id int64
 	)
 	{
-		p, ok := v.(*entries.Journal)
+		p, ok := v.(*entries.UpdatePayload)
 		if !ok {
-			return nil, goahttp.ErrInvalidType("entries", "update", "*entries.Journal", v)
+			return nil, goahttp.ErrInvalidType("entries", "update", "*entries.UpdatePayload", v)
 		}
-		if p.ID != nil {
-			id = *p.ID
-		}
+		id = p.ID
 	}
 	u := &url.URL{Scheme: c.scheme, Host: c.host, Path: UpdateEntriesPath(id)}
 	req, err := http.NewRequest("PUT", u.String(), nil)
@@ -264,9 +273,9 @@ func (c *Client) BuildUpdateRequest(ctx context.Context, v any) (*http.Request, 
 // update server.
 func EncodeUpdateRequest(encoder func(*http.Request) goahttp.Encoder) func(*http.Request, any) error {
 	return func(req *http.Request, v any) error {
-		p, ok := v.(*entries.Journal)
+		p, ok := v.(*entries.UpdatePayload)
 		if !ok {
-			return goahttp.ErrInvalidType("entries", "update", "*entries.Journal", v)
+			return goahttp.ErrInvalidType("entries", "update", "*entries.UpdatePayload", v)
 		}
 		body := NewUpdateRequestBody(p)
 		if err := encoder(req).Encode(&body); err != nil {
@@ -340,11 +349,11 @@ func (c *Client) BuildDeleteRequest(ctx context.Context, v any) (*http.Request, 
 		id int64
 	)
 	{
-		p, ok := v.(int64)
+		p, ok := v.(*entries.DeletePayload)
 		if !ok {
-			return nil, goahttp.ErrInvalidType("entries", "delete", "int64", v)
+			return nil, goahttp.ErrInvalidType("entries", "delete", "*entries.DeletePayload", v)
 		}
-		id = p
+		id = p.ID
 	}
 	u := &url.URL{Scheme: c.scheme, Host: c.host, Path: DeleteEntriesPath(id)}
 	req, err := http.NewRequest("DELETE", u.String(), nil)
@@ -407,13 +416,13 @@ func DecodeDeleteResponse(decoder func(*http.Response) goahttp.Decoder, restoreB
 func unmarshalJournalResponseToEntriesJournal(v *JournalResponse) *entries.Journal {
 	res := &entries.Journal{
 		ID:        v.ID,
+		CreatedAt: v.CreatedAt,
+		UpdatedAt: v.UpdatedAt,
+		UserID:    v.UserID,
 		EntryDate: *v.EntryDate,
 		Kind:      *v.Kind,
 		Title:     *v.Title,
 		Body:      v.Body,
-		CreatedAt: v.CreatedAt,
-		UpdatedAt: v.UpdatedAt,
-		UserID:    v.UserID,
 	}
 
 	return res

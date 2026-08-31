@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"strconv"
 
 	entriesc "github.com/e601201/life-api/gen/http/entries/client"
 	healthc "github.com/e601201/life-api/gen/http/health/client"
@@ -33,7 +32,7 @@ func UsageCommands() []string {
 // UsageExamples produces an example of a valid invocation of the CLI tool.
 func UsageExamples() string {
 	return os.Args[0] + " " + "health check" + "\n" +
-		os.Args[0] + " " + "entries create --body '{\n      \"body\": \"Temporibus neque cumque fuga sit quae esse.\",\n      \"created_at\": \"Est perferendis.\",\n      \"entry_date\": \"Excepturi illum.\",\n      \"id\": 3713054837053773390,\n      \"kind\": \"diary\",\n      \"title\": \"Earum aperiam.\",\n      \"updated_at\": \"Similique repellat occaecati.\",\n      \"user_id\": 4399518966327619297\n   }'" + "\n" +
+		os.Args[0] + " " + "entries create --body '{\n      \"body\": \"Temporibus neque cumque fuga sit quae esse.\",\n      \"entry_date\": \"1994-04-12\",\n      \"kind\": \"diary\",\n      \"title\": \"u\"\n   }'" + "\n" +
 		""
 }
 
@@ -58,15 +57,15 @@ func ParseEndpoint(
 
 		entriesListFlags = flag.NewFlagSet("list", flag.ExitOnError)
 
-		entriesGetFlags = flag.NewFlagSet("get", flag.ExitOnError)
-		entriesGetPFlag = entriesGetFlags.String("p", "REQUIRED", "int64 is the payload type of the entries service get method.")
+		entriesGetFlags  = flag.NewFlagSet("get", flag.ExitOnError)
+		entriesGetIDFlag = entriesGetFlags.String("id", "REQUIRED", "Entry ID")
 
 		entriesUpdateFlags    = flag.NewFlagSet("update", flag.ExitOnError)
 		entriesUpdateBodyFlag = entriesUpdateFlags.String("body", "REQUIRED", "")
-		entriesUpdateIDFlag   = entriesUpdateFlags.String("id", "REQUIRED", "")
+		entriesUpdateIDFlag   = entriesUpdateFlags.String("id", "REQUIRED", "Entry ID")
 
-		entriesDeleteFlags = flag.NewFlagSet("delete", flag.ExitOnError)
-		entriesDeletePFlag = entriesDeleteFlags.String("p", "REQUIRED", "int64 is the payload type of the entries service delete method.")
+		entriesDeleteFlags  = flag.NewFlagSet("delete", flag.ExitOnError)
+		entriesDeleteIDFlag = entriesDeleteFlags.String("id", "REQUIRED", "Entry ID")
 	)
 	healthFlags.Usage = healthUsage
 	healthCheckFlags.Usage = healthCheckUsage
@@ -174,21 +173,13 @@ func ParseEndpoint(
 				endpoint = c.List()
 			case "get":
 				endpoint = c.Get()
-				var err error
-				data, err = strconv.ParseInt(*entriesGetPFlag, 10, 64)
-				if err != nil {
-					return nil, nil, fmt.Errorf("invalid value for entriesGetPFlag, must be INT64")
-				}
+				data, err = entriesc.BuildGetPayload(*entriesGetIDFlag)
 			case "update":
 				endpoint = c.Update()
 				data, err = entriesc.BuildUpdatePayload(*entriesUpdateBodyFlag, *entriesUpdateIDFlag)
 			case "delete":
 				endpoint = c.Delete()
-				var err error
-				data, err = strconv.ParseInt(*entriesDeletePFlag, 10, 64)
-				if err != nil {
-					return nil, nil, fmt.Errorf("invalid value for entriesDeletePFlag, must be INT64")
-				}
+				data, err = entriesc.BuildDeletePayload(*entriesDeleteIDFlag)
 			}
 		}
 	}
@@ -254,7 +245,7 @@ func entriesCreateUsage() {
 
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, "Example:")
-	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "entries create --body '{\n      \"body\": \"Temporibus neque cumque fuga sit quae esse.\",\n      \"created_at\": \"Est perferendis.\",\n      \"entry_date\": \"Excepturi illum.\",\n      \"id\": 3713054837053773390,\n      \"kind\": \"diary\",\n      \"title\": \"Earum aperiam.\",\n      \"updated_at\": \"Similique repellat occaecati.\",\n      \"user_id\": 4399518966327619297\n   }'")
+	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "entries create --body '{\n      \"body\": \"Temporibus neque cumque fuga sit quae esse.\",\n      \"entry_date\": \"1994-04-12\",\n      \"kind\": \"diary\",\n      \"title\": \"u\"\n   }'")
 }
 
 func entriesListUsage() {
@@ -276,7 +267,7 @@ func entriesListUsage() {
 func entriesGetUsage() {
 	// Header with flags
 	fmt.Fprintf(os.Stderr, "%s [flags] entries get", os.Args[0])
-	fmt.Fprint(os.Stderr, " -p INT64")
+	fmt.Fprint(os.Stderr, " -id INT64")
 	fmt.Fprintln(os.Stderr)
 
 	// Description
@@ -284,11 +275,11 @@ func entriesGetUsage() {
 	fmt.Fprintln(os.Stderr, `Get a journal entry by ID`)
 
 	// Flags list
-	fmt.Fprintln(os.Stderr, `    -p INT64: int64 is the payload type of the entries service get method.`)
+	fmt.Fprintln(os.Stderr, `    -id INT64: Entry ID`)
 
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, "Example:")
-	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "entries get --p 5983056731733092241")
+	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "entries get --id 2136939742502294428")
 }
 
 func entriesUpdateUsage() {
@@ -304,17 +295,17 @@ func entriesUpdateUsage() {
 
 	// Flags list
 	fmt.Fprintln(os.Stderr, `    -body JSON: `)
-	fmt.Fprintln(os.Stderr, `    -id INT64: `)
+	fmt.Fprintln(os.Stderr, `    -id INT64: Entry ID`)
 
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, "Example:")
-	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "entries update --body '{\n      \"body\": \"Natus maiores quasi.\",\n      \"created_at\": \"Quia molestias ut.\",\n      \"entry_date\": \"Ipsum ab veniam sint.\",\n      \"kind\": \"til\",\n      \"title\": \"Et eos dolor est.\",\n      \"updated_at\": \"Debitis praesentium alias reiciendis iste sequi.\",\n      \"user_id\": 4407808995897993796\n   }' --id 2155220371406235712")
+	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "entries update --body '{\n      \"body\": \"Natus maiores quasi.\",\n      \"entry_date\": \"1998-12-26\",\n      \"kind\": \"til\",\n      \"title\": \"r\"\n   }' --id 6545909915602064166")
 }
 
 func entriesDeleteUsage() {
 	// Header with flags
 	fmt.Fprintf(os.Stderr, "%s [flags] entries delete", os.Args[0])
-	fmt.Fprint(os.Stderr, " -p INT64")
+	fmt.Fprint(os.Stderr, " -id INT64")
 	fmt.Fprintln(os.Stderr)
 
 	// Description
@@ -322,9 +313,9 @@ func entriesDeleteUsage() {
 	fmt.Fprintln(os.Stderr, `Delete a journal entry by ID`)
 
 	// Flags list
-	fmt.Fprintln(os.Stderr, `    -p INT64: int64 is the payload type of the entries service delete method.`)
+	fmt.Fprintln(os.Stderr, `    -id INT64: Entry ID`)
 
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, "Example:")
-	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "entries delete --p 7300034495900556417")
+	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "entries delete --id 5830450457673791293")
 }

@@ -16,15 +16,15 @@ import (
 // Journal entries service
 type Service interface {
 	// Create a new journal entry
-	Create(context.Context, *Journal) (res *Journal, err error)
+	Create(context.Context, *EntryRequest) (res *CreateResult, err error)
 	// List all journal entries
 	List(context.Context) (res []*Journal, err error)
 	// Get a journal entry by ID
-	Get(context.Context, int64) (res *Journal, err error)
+	Get(context.Context, *GetPayload) (res *Journal, err error)
 	// Update a journal entry by ID
-	Update(context.Context, *Journal) (res *Journal, err error)
+	Update(context.Context, *UpdatePayload) (res *Journal, err error)
 	// Delete a journal entry by ID
-	Delete(context.Context, int64) (err error)
+	Delete(context.Context, *DeletePayload) (err error)
 }
 
 // APIName is the name of the API as defined in the design.
@@ -43,16 +43,64 @@ const ServiceName = "entries"
 // MethodKey key.
 var MethodNames = [5]string{"create", "list", "get", "update", "delete"}
 
-// Journal is the payload type of the entries service create method.
-type Journal struct {
+// CreateResult is the result type of the entries service create method.
+type CreateResult struct {
+	// 作成されたリソースのパス
+	Location  string
 	ID        *int64
+	CreatedAt *string
+	UpdatedAt *string
+	UserID    *int64
+	// 記録日
 	EntryDate string
 	Kind      string
 	Title     string
 	Body      *string
+}
+
+// DeletePayload is the payload type of the entries service delete method.
+type DeletePayload struct {
+	// Entry ID
+	ID int64
+}
+
+// EntryRequest is the payload type of the entries service create method.
+type EntryRequest struct {
+	// 記録日
+	EntryDate string
+	Kind      string
+	Title     string
+	Body      *string
+}
+
+// GetPayload is the payload type of the entries service get method.
+type GetPayload struct {
+	// Entry ID
+	ID int64
+}
+
+// Journal is the result type of the entries service get method.
+type Journal struct {
+	ID        *int64
 	CreatedAt *string
 	UpdatedAt *string
 	UserID    *int64
+	// 記録日
+	EntryDate string
+	Kind      string
+	Title     string
+	Body      *string
+}
+
+// UpdatePayload is the payload type of the entries service update method.
+type UpdatePayload struct {
+	// Entry ID
+	ID int64
+	// 記録日
+	EntryDate string
+	Kind      string
+	Title     string
+	Body      *string
 }
 
 // MakeNotFound builds a goa.ServiceError from an error.

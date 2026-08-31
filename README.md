@@ -35,7 +35,8 @@ POST / PUT は `-H 'Content-Type: application/json'` が必須。
 # health
 curl localhost:8080/health
 
-# 作成（id・created_at・updated_at はサーバー側で付与される）
+# 作成（id・created_at・updated_at はサーバー側で付与。Location ヘッダに新リソースのパスが入る）
+# user_id もリクエストでは受け取らない（W3 で JWT から入れる）
 curl -H 'Content-Type: application/json' localhost:8080/entries \
   -d '{"title":"Goa入門","entry_date":"2026-08-31","kind":"til","body":"本文"}'
 
@@ -53,8 +54,12 @@ curl -i -X DELETE localhost:8080/entries/1
 # 異常系: 存在しない id は 404 not_found
 curl -i localhost:8080/entries/999
 
-# 異常系: バリデーション違反は 400（kind は til | diary のみ、title / entry_date / kind は必須）
+# 異常系: バリデーション違反は 400
+#（kind は til | diary のみ、title / entry_date / kind は必須。
+#  title の空文字と YYYY-MM-DD でない entry_date も 400 になる）
 curl -H 'Content-Type: application/json' localhost:8080/entries -d '{"title":"x"}'
+curl -H 'Content-Type: application/json' localhost:8080/entries \
+  -d '{"title":"","entry_date":"banana","kind":"til"}'
 ```
 
 ## 関連

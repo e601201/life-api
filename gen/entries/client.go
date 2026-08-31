@@ -34,13 +34,13 @@ func NewClient(create, list, get, update, delete_ goa.Endpoint) *Client {
 }
 
 // Create calls the "create" endpoint of the "entries" service.
-func (c *Client) Create(ctx context.Context, p *Journal) (res *Journal, err error) {
+func (c *Client) Create(ctx context.Context, p *EntryRequest) (res *CreateResult, err error) {
 	var ires any
 	ires, err = c.CreateEndpoint(ctx, p)
 	if err != nil {
 		return
 	}
-	return ires.(*Journal), nil
+	return ires.(*CreateResult), nil
 }
 
 // List calls the "list" endpoint of the "entries" service.
@@ -57,7 +57,7 @@ func (c *Client) List(ctx context.Context) (res []*Journal, err error) {
 // Get may return the following errors:
 //   - "not_found" (type *goa.ServiceError)
 //   - error: internal error
-func (c *Client) Get(ctx context.Context, p int64) (res *Journal, err error) {
+func (c *Client) Get(ctx context.Context, p *GetPayload) (res *Journal, err error) {
 	var ires any
 	ires, err = c.GetEndpoint(ctx, p)
 	if err != nil {
@@ -70,7 +70,7 @@ func (c *Client) Get(ctx context.Context, p int64) (res *Journal, err error) {
 // Update may return the following errors:
 //   - "not_found" (type *goa.ServiceError)
 //   - error: internal error
-func (c *Client) Update(ctx context.Context, p *Journal) (res *Journal, err error) {
+func (c *Client) Update(ctx context.Context, p *UpdatePayload) (res *Journal, err error) {
 	var ires any
 	ires, err = c.UpdateEndpoint(ctx, p)
 	if err != nil {
@@ -83,7 +83,7 @@ func (c *Client) Update(ctx context.Context, p *Journal) (res *Journal, err erro
 // Delete may return the following errors:
 //   - "not_found" (type *goa.ServiceError)
 //   - error: internal error
-func (c *Client) Delete(ctx context.Context, p int64) (err error) {
+func (c *Client) Delete(ctx context.Context, p *DeletePayload) (err error) {
 	_, err = c.DeleteEndpoint(ctx, p)
 	return
 }

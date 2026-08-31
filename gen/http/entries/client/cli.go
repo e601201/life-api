@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"unicode/utf8"
 
 	entries "github.com/e601201/life-api/gen/entries"
 	goa "goa.design/goa/v3/pkg"
@@ -18,47 +19,68 @@ import (
 
 // BuildCreatePayload builds the payload for the entries create endpoint from
 // CLI flags.
-func BuildCreatePayload(entriesCreateBody string) (*entries.Journal, error) {
+func BuildCreatePayload(entriesCreateBody string) (*entries.EntryRequest, error) {
 	var err error
 	var body CreateRequestBody
 	{
 		err = json.Unmarshal([]byte(entriesCreateBody), &body)
 		if err != nil {
-			return nil, fmt.Errorf("invalid JSON for body, \nerror: %s, \nexample of valid JSON:\n%s", err, "'{\n      \"body\": \"Temporibus neque cumque fuga sit quae esse.\",\n      \"created_at\": \"Est perferendis.\",\n      \"entry_date\": \"Excepturi illum.\",\n      \"id\": 3713054837053773390,\n      \"kind\": \"diary\",\n      \"title\": \"Earum aperiam.\",\n      \"updated_at\": \"Similique repellat occaecati.\",\n      \"user_id\": 4399518966327619297\n   }'")
+			return nil, fmt.Errorf("invalid JSON for body, \nerror: %s, \nexample of valid JSON:\n%s", err, "'{\n      \"body\": \"Temporibus neque cumque fuga sit quae esse.\",\n      \"entry_date\": \"1994-04-12\",\n      \"kind\": \"diary\",\n      \"title\": \"u\"\n   }'")
 		}
+		err = goa.MergeErrors(err, goa.ValidateFormat("body.entry_date", body.EntryDate, goa.FormatDate))
 		if !(body.Kind == "til" || body.Kind == "diary") {
 			err = goa.MergeErrors(err, goa.InvalidEnumValueError("body.kind", body.Kind, []any{"til", "diary"}))
+		}
+		if utf8.RuneCountInString(body.Title) < 1 {
+			err = goa.MergeErrors(err, goa.InvalidLengthError("body.title", body.Title, utf8.RuneCountInString(body.Title), 1, true))
 		}
 		if err != nil {
 			return nil, err
 		}
 	}
-	v := &entries.Journal{
-		ID:        body.ID,
+	v := &entries.EntryRequest{
 		EntryDate: body.EntryDate,
 		Kind:      body.Kind,
 		Title:     body.Title,
 		Body:      body.Body,
-		CreatedAt: body.CreatedAt,
-		UpdatedAt: body.UpdatedAt,
-		UserID:    body.UserID,
 	}
+
+	return v, nil
+}
+
+// BuildGetPayload builds the payload for the entries get endpoint from CLI
+// flags.
+func BuildGetPayload(entriesGetID string) (*entries.GetPayload, error) {
+	var err error
+	var id int64
+	{
+		id, err = strconv.ParseInt(entriesGetID, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid value for id, must be INT64")
+		}
+	}
+	v := &entries.GetPayload{}
+	v.ID = id
 
 	return v, nil
 }
 
 // BuildUpdatePayload builds the payload for the entries update endpoint from
 // CLI flags.
-func BuildUpdatePayload(entriesUpdateBody string, entriesUpdateID string) (*entries.Journal, error) {
+func BuildUpdatePayload(entriesUpdateBody string, entriesUpdateID string) (*entries.UpdatePayload, error) {
 	var err error
 	var body UpdateRequestBody
 	{
 		err = json.Unmarshal([]byte(entriesUpdateBody), &body)
 		if err != nil {
-			return nil, fmt.Errorf("invalid JSON for body, \nerror: %s, \nexample of valid JSON:\n%s", err, "'{\n      \"body\": \"Natus maiores quasi.\",\n      \"created_at\": \"Quia molestias ut.\",\n      \"entry_date\": \"Ipsum ab veniam sint.\",\n      \"kind\": \"til\",\n      \"title\": \"Et eos dolor est.\",\n      \"updated_at\": \"Debitis praesentium alias reiciendis iste sequi.\",\n      \"user_id\": 4407808995897993796\n   }'")
+			return nil, fmt.Errorf("invalid JSON for body, \nerror: %s, \nexample of valid JSON:\n%s", err, "'{\n      \"body\": \"Natus maiores quasi.\",\n      \"entry_date\": \"1998-12-26\",\n      \"kind\": \"til\",\n      \"title\": \"r\"\n   }'")
 		}
+		err = goa.MergeErrors(err, goa.ValidateFormat("body.entry_date", body.EntryDate, goa.FormatDate))
 		if !(body.Kind == "til" || body.Kind == "diary") {
 			err = goa.MergeErrors(err, goa.InvalidEnumValueError("body.kind", body.Kind, []any{"til", "diary"}))
+		}
+		if utf8.RuneCountInString(body.Title) < 1 {
+			err = goa.MergeErrors(err, goa.InvalidLengthError("body.title", body.Title, utf8.RuneCountInString(body.Title), 1, true))
 		}
 		if err != nil {
 			return nil, err
@@ -71,16 +93,30 @@ func BuildUpdatePayload(entriesUpdateBody string, entriesUpdateID string) (*entr
 			return nil, fmt.Errorf("invalid value for id, must be INT64")
 		}
 	}
-	v := &entries.Journal{
+	v := &entries.UpdatePayload{
 		EntryDate: body.EntryDate,
 		Kind:      body.Kind,
 		Title:     body.Title,
 		Body:      body.Body,
-		CreatedAt: body.CreatedAt,
-		UpdatedAt: body.UpdatedAt,
-		UserID:    body.UserID,
 	}
-	v.ID = &id
+	v.ID = id
+
+	return v, nil
+}
+
+// BuildDeletePayload builds the payload for the entries delete endpoint from
+// CLI flags.
+func BuildDeletePayload(entriesDeleteID string) (*entries.DeletePayload, error) {
+	var err error
+	var id int64
+	{
+		id, err = strconv.ParseInt(entriesDeleteID, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid value for id, must be INT64")
+		}
+	}
+	v := &entries.DeletePayload{}
+	v.ID = id
 
 	return v, nil
 }

@@ -24,69 +24,69 @@ paths:
                                     $ref: '#/components/schemas/Journal'
                                 example:
                                     - body: Est ut omnis voluptates omnis et neque.
-                                      created_at: Doloremque nulla non.
-                                      entry_date: Qui alias animi beatae.
+                                      created_at: "1990-12-09T12:52:10Z"
+                                      entry_date: "1987-08-29"
                                       id: 3312195076812813890
                                       kind: til
-                                      title: Voluptatem distinctio corporis consequatur quos.
-                                      updated_at: Itaque nemo est cupiditate.
+                                      title: j
+                                      updated_at: "2004-10-20T00:36:43Z"
                                       user_id: 8220775752495052168
                                     - body: Est ut omnis voluptates omnis et neque.
-                                      created_at: Doloremque nulla non.
-                                      entry_date: Qui alias animi beatae.
+                                      created_at: "1990-12-09T12:52:10Z"
+                                      entry_date: "1987-08-29"
                                       id: 3312195076812813890
                                       kind: til
-                                      title: Voluptatem distinctio corporis consequatur quos.
-                                      updated_at: Itaque nemo est cupiditate.
+                                      title: j
+                                      updated_at: "2004-10-20T00:36:43Z"
                                       user_id: 8220775752495052168
                                     - body: Est ut omnis voluptates omnis et neque.
-                                      created_at: Doloremque nulla non.
-                                      entry_date: Qui alias animi beatae.
+                                      created_at: "1990-12-09T12:52:10Z"
+                                      entry_date: "1987-08-29"
                                       id: 3312195076812813890
                                       kind: til
-                                      title: Voluptatem distinctio corporis consequatur quos.
-                                      updated_at: Itaque nemo est cupiditate.
+                                      title: j
+                                      updated_at: "2004-10-20T00:36:43Z"
                                       user_id: 8220775752495052168
                                     - body: Est ut omnis voluptates omnis et neque.
-                                      created_at: Doloremque nulla non.
-                                      entry_date: Qui alias animi beatae.
+                                      created_at: "1990-12-09T12:52:10Z"
+                                      entry_date: "1987-08-29"
                                       id: 3312195076812813890
                                       kind: til
-                                      title: Voluptatem distinctio corporis consequatur quos.
-                                      updated_at: Itaque nemo est cupiditate.
+                                      title: j
+                                      updated_at: "2004-10-20T00:36:43Z"
                                       user_id: 8220775752495052168
                             example:
                                 - body: Est ut omnis voluptates omnis et neque.
-                                  created_at: Doloremque nulla non.
-                                  entry_date: Qui alias animi beatae.
+                                  created_at: "1990-12-09T12:52:10Z"
+                                  entry_date: "1987-08-29"
                                   id: 3312195076812813890
                                   kind: til
-                                  title: Voluptatem distinctio corporis consequatur quos.
-                                  updated_at: Itaque nemo est cupiditate.
+                                  title: j
+                                  updated_at: "2004-10-20T00:36:43Z"
                                   user_id: 8220775752495052168
                                 - body: Est ut omnis voluptates omnis et neque.
-                                  created_at: Doloremque nulla non.
-                                  entry_date: Qui alias animi beatae.
+                                  created_at: "1990-12-09T12:52:10Z"
+                                  entry_date: "1987-08-29"
                                   id: 3312195076812813890
                                   kind: til
-                                  title: Voluptatem distinctio corporis consequatur quos.
-                                  updated_at: Itaque nemo est cupiditate.
+                                  title: j
+                                  updated_at: "2004-10-20T00:36:43Z"
                                   user_id: 8220775752495052168
                                 - body: Est ut omnis voluptates omnis et neque.
-                                  created_at: Doloremque nulla non.
-                                  entry_date: Qui alias animi beatae.
+                                  created_at: "1990-12-09T12:52:10Z"
+                                  entry_date: "1987-08-29"
                                   id: 3312195076812813890
                                   kind: til
-                                  title: Voluptatem distinctio corporis consequatur quos.
-                                  updated_at: Itaque nemo est cupiditate.
+                                  title: j
+                                  updated_at: "2004-10-20T00:36:43Z"
                                   user_id: 8220775752495052168
                                 - body: Est ut omnis voluptates omnis et neque.
-                                  created_at: Doloremque nulla non.
-                                  entry_date: Qui alias animi beatae.
+                                  created_at: "1990-12-09T12:52:10Z"
+                                  entry_date: "1987-08-29"
                                   id: 3312195076812813890
                                   kind: til
-                                  title: Voluptatem distinctio corporis consequatur quos.
-                                  updated_at: Itaque nemo est cupiditate.
+                                  title: j
+                                  updated_at: "2004-10-20T00:36:43Z"
                                   user_id: 8220775752495052168
         post:
             tags:
@@ -100,31 +100,35 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/Journal'
+                            $ref: '#/components/schemas/EntryRequest'
                         example:
                             body: Temporibus neque cumque fuga sit quae esse.
-                            created_at: Est perferendis.
-                            entry_date: Excepturi illum.
-                            id: 3713054837053773390
+                            entry_date: "1994-04-12"
                             kind: diary
-                            title: Earum aperiam.
-                            updated_at: Similique repellat occaecati.
-                            user_id: 4399518966327619297
+                            title: u
             responses:
                 "201":
                     description: Created response.
+                    headers:
+                        Location:
+                            description: 作成されたリソースのパス
+                            schema:
+                                type: string
+                                description: 作成されたリソースのパス
+                                example: /entries/1
+                            example: /entries/1
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/Journal'
+                                $ref: '#/components/schemas/CreateResponseBody'
                             example:
                                 body: Ut iste veniam mollitia.
-                                created_at: Enim velit iusto consequatur ut.
-                                entry_date: Expedita quo iure cumque.
+                                created_at: "1990-06-20T15:39:26Z"
+                                entry_date: "1970-02-24"
                                 id: 1587168276706967770
                                 kind: til
-                                title: Vel ullam porro quis consectetur.
-                                updated_at: Sint ut est a omnis accusamus magni.
+                                title: ri
+                                updated_at: "2011-10-20T03:00:30Z"
                                 user_id: 535544025447781906
     /entries/{id}:
         delete:
@@ -136,12 +140,14 @@ paths:
             parameters:
                 - name: id
                   in: path
+                  description: Entry ID
                   required: true
                   schema:
                     type: integer
-                    example: 2550309575383027482
+                    description: Entry ID
+                    example: 5830450457673791293
                     format: int64
-                  example: 3630339733469142732
+                  example: 5251399647721636389
             responses:
                 "204":
                     description: No Content response.
@@ -160,12 +166,14 @@ paths:
             parameters:
                 - name: id
                   in: path
+                  description: Entry ID
                   required: true
                   schema:
                     type: integer
-                    example: 2550309575383027482
+                    description: Entry ID
+                    example: 2136939742502294428
                     format: int64
-                  example: 3630339733469142732
+                  example: 557970826572202125
             responses:
                 "200":
                     description: OK response.
@@ -175,12 +183,12 @@ paths:
                                 $ref: '#/components/schemas/Journal'
                             example:
                                 body: Omnis eum.
-                                created_at: Quis rerum id nobis quidem.
-                                entry_date: Occaecati sit officiis.
+                                created_at: "1977-02-18T21:10:59Z"
+                                entry_date: "1975-06-04"
                                 id: 1508954127712631977
                                 kind: til
-                                title: Expedita deleniti porro non voluptates.
-                                updated_at: Sint et sed nihil enim laboriosam porro.
+                                title: tyz
+                                updated_at: "2001-10-21T09:21:16Z"
                                 user_id: 1741871451947034476
                 "404":
                     description: 'not_found: Not Found response.'
@@ -197,27 +205,26 @@ paths:
             parameters:
                 - name: id
                   in: path
+                  description: Entry ID
                   required: true
                   schema:
                     type: integer
-                    example: 2155220371406235712
+                    description: Entry ID
+                    example: 6545909915602064166
                     format: int64
-                  example: 4944881953310105960
+                  example: 8370924199144215232
             requestBody:
                 description: Request body for update.
                 required: true
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/Journal2'
+                            $ref: '#/components/schemas/EntryRequest'
                         example:
                             body: Natus maiores quasi.
-                            created_at: Quia molestias ut.
-                            entry_date: Ipsum ab veniam sint.
+                            entry_date: "1998-12-26"
                             kind: til
-                            title: Et eos dolor est.
-                            updated_at: Debitis praesentium alias reiciendis iste sequi.
-                            user_id: 4407808995897993796
+                            title: r
             responses:
                 "200":
                     description: OK response.
@@ -227,12 +234,12 @@ paths:
                                 $ref: '#/components/schemas/Journal'
                             example:
                                 body: Eveniet totam sit quia.
-                                created_at: Aperiam et maxime aut blanditiis est.
-                                entry_date: Enim aliquam ut et.
+                                created_at: "2006-08-03T00:13:12Z"
+                                entry_date: "1976-07-08"
                                 id: 6373734996410084234
                                 kind: diary
-                                title: Ipsam harum nemo.
-                                updated_at: Deserunt ut ut sed deleniti.
+                                title: "7"
+                                updated_at: "1986-10-15T18:33:16Z"
                                 user_id: 3366940458952493031
                 "404":
                     description: 'not_found: Not Found response.'
@@ -259,6 +266,87 @@ paths:
                             example: Numquam sint nulla dolores similique est.
 components:
     schemas:
+        CreateResponseBody:
+            type: object
+            properties:
+                body:
+                    type: string
+                    example: Ut iste veniam mollitia.
+                created_at:
+                    type: string
+                    example: "1990-06-20T15:39:26Z"
+                    format: date-time
+                entry_date:
+                    type: string
+                    description: 記録日
+                    example: "1970-02-24"
+                    format: date
+                id:
+                    type: integer
+                    example: 1587168276706967770
+                    format: int64
+                kind:
+                    type: string
+                    example: til
+                    enum:
+                        - til
+                        - diary
+                title:
+                    type: string
+                    example: ri
+                    minLength: 1
+                updated_at:
+                    type: string
+                    example: "2011-10-20T03:00:30Z"
+                    format: date-time
+                user_id:
+                    type: integer
+                    example: 535544025447781906
+                    format: int64
+            example:
+                body: Ut iste veniam mollitia.
+                created_at: "1990-06-20T15:39:26Z"
+                entry_date: "1970-02-24"
+                id: 1587168276706967770
+                kind: til
+                title: ri
+                updated_at: "2011-10-20T03:00:30Z"
+                user_id: 535544025447781906
+            required:
+                - title
+                - entry_date
+                - kind
+        EntryRequest:
+            type: object
+            properties:
+                body:
+                    type: string
+                    example: Temporibus neque cumque fuga sit quae esse.
+                entry_date:
+                    type: string
+                    description: 記録日
+                    example: "1994-04-12"
+                    format: date
+                kind:
+                    type: string
+                    example: diary
+                    enum:
+                        - til
+                        - diary
+                title:
+                    type: string
+                    example: u
+                    minLength: 1
+            description: Request body for create.
+            example:
+                body: Temporibus neque cumque fuga sit quae esse.
+                entry_date: "1994-04-12"
+                kind: diary
+                title: u
+            required:
+                - title
+                - entry_date
+                - kind
         Error:
             type: object
             properties:
@@ -306,59 +394,20 @@ components:
             properties:
                 body:
                     type: string
-                    example: Temporibus neque cumque fuga sit quae esse.
+                    example: Est ut omnis voluptates omnis et neque.
                 created_at:
                     type: string
-                    example: Est perferendis.
+                    example: "1990-12-09T12:52:10Z"
+                    format: date-time
                 entry_date:
                     type: string
-                    example: Excepturi illum.
+                    description: 記録日
+                    example: "1987-08-29"
+                    format: date
                 id:
                     type: integer
-                    example: 3713054837053773390
+                    example: 3312195076812813890
                     format: int64
-                kind:
-                    type: string
-                    example: diary
-                    enum:
-                        - til
-                        - diary
-                title:
-                    type: string
-                    example: Earum aperiam.
-                updated_at:
-                    type: string
-                    example: Similique repellat occaecati.
-                user_id:
-                    type: integer
-                    example: 4399518966327619297
-                    format: int64
-            description: Request body for create.
-            example:
-                body: Temporibus neque cumque fuga sit quae esse.
-                created_at: Est perferendis.
-                entry_date: Excepturi illum.
-                id: 3713054837053773390
-                kind: diary
-                title: Earum aperiam.
-                updated_at: Similique repellat occaecati.
-                user_id: 4399518966327619297
-            required:
-                - title
-                - entry_date
-                - kind
-        Journal2:
-            type: object
-            properties:
-                body:
-                    type: string
-                    example: Natus maiores quasi.
-                created_at:
-                    type: string
-                    example: Quia molestias ut.
-                entry_date:
-                    type: string
-                    example: Ipsum ab veniam sint.
                 kind:
                     type: string
                     example: til
@@ -367,23 +416,26 @@ components:
                         - diary
                 title:
                     type: string
-                    example: Et eos dolor est.
+                    example: j
+                    minLength: 1
                 updated_at:
                     type: string
-                    example: Debitis praesentium alias reiciendis iste sequi.
+                    example: "2004-10-20T00:36:43Z"
+                    format: date-time
                 user_id:
                     type: integer
-                    example: 4407808995897993796
+                    example: 8220775752495052168
                     format: int64
-            description: Request body for update.
+            description: A journal entry
             example:
-                body: Natus maiores quasi.
-                created_at: Quia molestias ut.
-                entry_date: Ipsum ab veniam sint.
+                body: Est ut omnis voluptates omnis et neque.
+                created_at: "1990-12-09T12:52:10Z"
+                entry_date: "1987-08-29"
+                id: 3312195076812813890
                 kind: til
-                title: Et eos dolor est.
-                updated_at: Debitis praesentium alias reiciendis iste sequi.
-                user_id: 4407808995897993796
+                title: j
+                updated_at: "2004-10-20T00:36:43Z"
+                user_id: 8220775752495052168
             required:
                 - title
                 - entry_date

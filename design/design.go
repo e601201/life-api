@@ -24,40 +24,68 @@ var _ = Service("health", func() {
 	})
 })
 
-// Journal type definition
-var Journal = Type("Journal", func() {
-	Description("A journal entry")
+// EntryRequest はクライアントが書き込めるフィールドだけを持つリクエスト型。
+// id / created_at / updated_at はサーバー側で付与する。
+// user_id も W3 で JWT から入れる予定のため、クライアントからは受け取らない。
+// tags は現状では入れない
+var EntryRequest = Type("EntryRequest", func() {
+	Description("Client-writable fields of a journal entry")
 
-	// id / entry_date(記録日) / kind（til or diary）/ title / body / created_at / updated_at
-	// tags 現状では入れない
-	// idは自動採番されるので、クライアントからは送信されない
-	// user_idは今のうちに入れておく。
-	Attribute("id", Int64)
-	Attribute("entry_date", String)
+	Attribute("entry_date", String, "記録日", func() {
+		Format(FormatDate)
+	})
 	Attribute("kind", String, func() {
 		Enum("til", "diary")
 	})
-	Attribute("title", String)
+	// Required はキーの存在しか見ないため、空文字を弾くには MinLength が要る
+	Attribute("title", String, func() {
+		MinLength(1)
+	})
 	Attribute("body", String)
-	Attribute("created_at", String)
-	Attribute("updated_at", String)
-	Attribute("user_id", Int64)
 
 	Required("title", "entry_date", "kind")
 })
 
-// JournalにService entries に 5 メソッド(POST / GET list / GET one / PUT / DELETE)。
+// Journal は API が返すエントリの形。EntryRequest + サーバー管理フィールド。
+var Journal = Type("Journal", func() {
+	Description("A journal entry")
+
+	Extend(EntryRequest)
+
+	// id は自動採番。タイムスタンプもサーバー側で付与する
+	Attribute("id", Int64)
+	Attribute("created_at", String, func() {
+		Format(FormatDateTime)
+	})
+	Attribute("updated_at", String, func() {
+		Format(FormatDateTime)
+	})
+	// user_id は W3 のマルチユーザ化を見越して先に持たせておく（値は JWT 導入時に入る）
+	Attribute("user_id", Int64)
+})
+
+// Service entries: 5 メソッド(POST / GET list / GET one / PUT / DELETE)。
 var _ = Service("entries", func() {
 	Description("Journal entries service")
 
 	Method("create", func() {
 		Description("Create a new journal entry")
-		Payload(Journal)
-		Result(Journal)
+		Payload(EntryRequest)
+		// Journal + location。location は Location ヘッダにマップされるため、
+		// レスポンスボディには Journal のフィールドだけが残る
+		Result(func() {
+			Extend(Journal)
+			Attribute("location", String, "作成されたリソースのパス", func() {
+				Example("/entries/1")
+			})
+			Required("location")
+		})
 
 		HTTP(func() {
 			POST("/entries")
-			Response(StatusCreated)
+			Response(StatusCreated, func() {
+				Header("location:Location")
+			})
 		})
 	})
 
@@ -73,7 +101,11 @@ var _ = Service("entries", func() {
 
 	Method("get", func() {
 		Description("Get a journal entry by ID")
-		Payload(Int64)
+		// 無名の Payload(Int64) だと CLI のフラグが -p になるので、id と名前を付ける
+		Payload(func() {
+			Attribute("id", Int64, "Entry ID")
+			Required("id")
+		})
 		Result(Journal)
 		// idが存在しない場合は404を返す
 		Error("not_found")
@@ -86,7 +118,12 @@ var _ = Service("entries", func() {
 
 	Method("update", func() {
 		Description("Update a journal entry by ID")
-		Payload(Journal)
+		// EntryRequest + パスパラメータの id。id は必須なので実装側で nil チェックが要らない
+		Payload(func() {
+			Extend(EntryRequest)
+			Attribute("id", Int64, "Entry ID")
+			Required("id")
+		})
 		Result(Journal)
 
 		// idが存在しない場合は404を返す
@@ -100,7 +137,10 @@ var _ = Service("entries", func() {
 
 	Method("delete", func() {
 		Description("Delete a journal entry by ID")
-		Payload(Int64)
+		Payload(func() {
+			Attribute("id", Int64, "Entry ID")
+			Required("id")
+		})
 
 		// idが存在しない場合は404を返す
 		Error("not_found")
