@@ -7,7 +7,9 @@ import (
 	"sync"
 	"time"
 
+	entries "github.com/e601201/life-api/gen/entries"
 	health "github.com/e601201/life-api/gen/health"
+	entriessvr "github.com/e601201/life-api/gen/http/entries/server"
 	healthsvr "github.com/e601201/life-api/gen/http/health/server"
 	"goa.design/clue/debug"
 	"goa.design/clue/log"
@@ -16,7 +18,7 @@ import (
 
 // handleHTTPServer starts configures and starts a HTTP server on the given
 // URL. It shuts down the server if any error is received in the error channel.
-func handleHTTPServer(ctx context.Context, u *url.URL, healthEndpoints *health.Endpoints, wg *sync.WaitGroup, errc chan error, dbg bool) {
+func handleHTTPServer(ctx context.Context, u *url.URL, healthEndpoints *health.Endpoints, entriesEndpoints *entries.Endpoints, wg *sync.WaitGroup, errc chan error, dbg bool) {
 
 	// Provide the transport specific request decoder and response encoder.
 	// The goa http package has built-in support for JSON, XML and gob.
@@ -45,15 +47,18 @@ func handleHTTPServer(ctx context.Context, u *url.URL, healthEndpoints *health.E
 	// the service input and output data structures to HTTP requests and
 	// responses.
 	var (
-		healthServer *healthsvr.Server
+		healthServer  *healthsvr.Server
+		entriesServer *entriessvr.Server
 	)
 	{
 		eh := errorHandler(ctx)
 		healthServer = healthsvr.New(healthEndpoints, mux, dec, enc, eh, nil)
+		entriesServer = entriessvr.New(entriesEndpoints, mux, dec, enc, eh, nil)
 	}
 
 	// Configure the mux.
 	healthsvr.Mount(mux, healthServer)
+	entriessvr.Mount(mux, entriesServer)
 
 	var handler http.Handler = mux
 	if dbg {
@@ -66,6 +71,9 @@ func handleHTTPServer(ctx context.Context, u *url.URL, healthEndpoints *health.E
 	// configure the server as required by your service.
 	srv := &http.Server{Addr: u.Host, Handler: handler, ReadHeaderTimeout: time.Second * 60}
 	for _, m := range healthServer.Mounts {
+		log.Printf(ctx, "HTTP %q mounted on %s %s", m.Method, m.Verb, m.Pattern)
+	}
+	for _, m := range entriesServer.Mounts {
 		log.Printf(ctx, "HTTP %q mounted on %s %s", m.Method, m.Verb, m.Pattern)
 	}
 

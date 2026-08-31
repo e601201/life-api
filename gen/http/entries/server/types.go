@@ -54,9 +54,9 @@ type CreateResponseBody struct {
 // response body.
 type ListResponseBody []*JournalResponse
 
-// GetOKResponseBody is the type of the "entries" service "get" endpoint HTTP
+// GetResponseBody is the type of the "entries" service "get" endpoint HTTP
 // response body.
-type GetOKResponseBody struct {
+type GetResponseBody struct {
 	ID        *int64  `form:"id,omitempty" json:"id,omitempty" xml:"id,omitempty"`
 	EntryDate string  `form:"entry_date" json:"entry_date" xml:"entry_date"`
 	Kind      string  `form:"kind" json:"kind" xml:"kind"`
@@ -67,9 +67,9 @@ type GetOKResponseBody struct {
 	UserID    *int64  `form:"user_id,omitempty" json:"user_id,omitempty" xml:"user_id,omitempty"`
 }
 
-// UpdateOKResponseBody is the type of the "entries" service "update" endpoint
+// UpdateResponseBody is the type of the "entries" service "update" endpoint
 // HTTP response body.
-type UpdateOKResponseBody struct {
+type UpdateResponseBody struct {
 	ID        *int64  `form:"id,omitempty" json:"id,omitempty" xml:"id,omitempty"`
 	EntryDate string  `form:"entry_date" json:"entry_date" xml:"entry_date"`
 	Kind      string  `form:"kind" json:"kind" xml:"kind"`
@@ -78,6 +78,60 @@ type UpdateOKResponseBody struct {
 	CreatedAt *string `form:"created_at,omitempty" json:"created_at,omitempty" xml:"created_at,omitempty"`
 	UpdatedAt *string `form:"updated_at,omitempty" json:"updated_at,omitempty" xml:"updated_at,omitempty"`
 	UserID    *int64  `form:"user_id,omitempty" json:"user_id,omitempty" xml:"user_id,omitempty"`
+}
+
+// GetNotFoundResponseBody is the type of the "entries" service "get" endpoint
+// HTTP response body for the "not_found" error.
+type GetNotFoundResponseBody struct {
+	// Name is the name of this class of errors.
+	Name string `form:"name" json:"name" xml:"name"`
+	// ID is a unique identifier for this particular occurrence of the problem.
+	ID string `form:"id" json:"id" xml:"id"`
+	// Message is a human-readable explanation specific to this occurrence of the
+	// problem.
+	Message string `form:"message" json:"message" xml:"message"`
+	// Is the error temporary?
+	Temporary bool `form:"temporary" json:"temporary" xml:"temporary"`
+	// Is the error a timeout?
+	Timeout bool `form:"timeout" json:"timeout" xml:"timeout"`
+	// Is the error a server-side fault?
+	Fault bool `form:"fault" json:"fault" xml:"fault"`
+}
+
+// UpdateNotFoundResponseBody is the type of the "entries" service "update"
+// endpoint HTTP response body for the "not_found" error.
+type UpdateNotFoundResponseBody struct {
+	// Name is the name of this class of errors.
+	Name string `form:"name" json:"name" xml:"name"`
+	// ID is a unique identifier for this particular occurrence of the problem.
+	ID string `form:"id" json:"id" xml:"id"`
+	// Message is a human-readable explanation specific to this occurrence of the
+	// problem.
+	Message string `form:"message" json:"message" xml:"message"`
+	// Is the error temporary?
+	Temporary bool `form:"temporary" json:"temporary" xml:"temporary"`
+	// Is the error a timeout?
+	Timeout bool `form:"timeout" json:"timeout" xml:"timeout"`
+	// Is the error a server-side fault?
+	Fault bool `form:"fault" json:"fault" xml:"fault"`
+}
+
+// DeleteNotFoundResponseBody is the type of the "entries" service "delete"
+// endpoint HTTP response body for the "not_found" error.
+type DeleteNotFoundResponseBody struct {
+	// Name is the name of this class of errors.
+	Name string `form:"name" json:"name" xml:"name"`
+	// ID is a unique identifier for this particular occurrence of the problem.
+	ID string `form:"id" json:"id" xml:"id"`
+	// Message is a human-readable explanation specific to this occurrence of the
+	// problem.
+	Message string `form:"message" json:"message" xml:"message"`
+	// Is the error temporary?
+	Temporary bool `form:"temporary" json:"temporary" xml:"temporary"`
+	// Is the error a timeout?
+	Timeout bool `form:"timeout" json:"timeout" xml:"timeout"`
+	// Is the error a server-side fault?
+	Fault bool `form:"fault" json:"fault" xml:"fault"`
 }
 
 // JournalResponse is used to define fields on response body types.
@@ -122,10 +176,10 @@ func NewListResponseBody(res []*entries.Journal) ListResponseBody {
 	return body
 }
 
-// NewGetOKResponseBody builds the HTTP response body from the result of the
+// NewGetResponseBody builds the HTTP response body from the result of the
 // "get" endpoint of the "entries" service.
-func NewGetOKResponseBody(res *entries.Journal) *GetOKResponseBody {
-	body := &GetOKResponseBody{
+func NewGetResponseBody(res *entries.Journal) *GetResponseBody {
+	body := &GetResponseBody{
 		ID:        res.ID,
 		EntryDate: res.EntryDate,
 		Kind:      res.Kind,
@@ -138,10 +192,10 @@ func NewGetOKResponseBody(res *entries.Journal) *GetOKResponseBody {
 	return body
 }
 
-// NewUpdateOKResponseBody builds the HTTP response body from the result of the
+// NewUpdateResponseBody builds the HTTP response body from the result of the
 // "update" endpoint of the "entries" service.
-func NewUpdateOKResponseBody(res *entries.Journal) *UpdateOKResponseBody {
-	body := &UpdateOKResponseBody{
+func NewUpdateResponseBody(res *entries.Journal) *UpdateResponseBody {
+	body := &UpdateResponseBody{
 		ID:        res.ID,
 		EntryDate: res.EntryDate,
 		Kind:      res.Kind,
@@ -150,6 +204,48 @@ func NewUpdateOKResponseBody(res *entries.Journal) *UpdateOKResponseBody {
 		CreatedAt: res.CreatedAt,
 		UpdatedAt: res.UpdatedAt,
 		UserID:    res.UserID,
+	}
+	return body
+}
+
+// NewGetNotFoundResponseBody builds the HTTP response body from the result of
+// the "get" endpoint of the "entries" service.
+func NewGetNotFoundResponseBody(res *goa.ServiceError) *GetNotFoundResponseBody {
+	body := &GetNotFoundResponseBody{
+		Name:      res.Name,
+		ID:        res.ID,
+		Message:   res.Message,
+		Temporary: res.Temporary,
+		Timeout:   res.Timeout,
+		Fault:     res.Fault,
+	}
+	return body
+}
+
+// NewUpdateNotFoundResponseBody builds the HTTP response body from the result
+// of the "update" endpoint of the "entries" service.
+func NewUpdateNotFoundResponseBody(res *goa.ServiceError) *UpdateNotFoundResponseBody {
+	body := &UpdateNotFoundResponseBody{
+		Name:      res.Name,
+		ID:        res.ID,
+		Message:   res.Message,
+		Temporary: res.Temporary,
+		Timeout:   res.Timeout,
+		Fault:     res.Fault,
+	}
+	return body
+}
+
+// NewDeleteNotFoundResponseBody builds the HTTP response body from the result
+// of the "delete" endpoint of the "entries" service.
+func NewDeleteNotFoundResponseBody(res *goa.ServiceError) *DeleteNotFoundResponseBody {
+	body := &DeleteNotFoundResponseBody{
+		Name:      res.Name,
+		ID:        res.ID,
+		Message:   res.Message,
+		Temporary: res.Temporary,
+		Timeout:   res.Timeout,
+		Fault:     res.Fault,
 	}
 	return body
 }

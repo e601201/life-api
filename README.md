@@ -26,6 +26,37 @@ bind するアドレスは `design/design.go` の `Server` / `Host` で定義し
   API 名やメソッド名を変えたときは `goa gen` だけ流し、`cmd/` と実装は手で追随させる
 - `gen/` はコミットする。Docker のビルドステージで goa CLI を入れずに済むため
 
+### 打鍵確認（curl）
+
+POST / PUT は `-H 'Content-Type: application/json'` が必須。
+`-d` だけだと curl は form-urlencoded で送るため、Goa が 415 を返す。
+
+```sh
+# health
+curl localhost:8080/health
+
+# 作成（id・created_at・updated_at はサーバー側で付与される）
+curl -H 'Content-Type: application/json' localhost:8080/entries \
+  -d '{"title":"Goa入門","entry_date":"2026-08-31","kind":"til","body":"本文"}'
+
+# 一覧 / 単体取得
+curl localhost:8080/entries
+curl localhost:8080/entries/1
+
+# 更新（created_at は維持され、updated_at だけ進む）
+curl -X PUT -H 'Content-Type: application/json' localhost:8080/entries/1 \
+  -d '{"title":"Goa入門(更新)","entry_date":"2026-08-31","kind":"til","body":"追記"}'
+
+# 削除（204 No Content）
+curl -i -X DELETE localhost:8080/entries/1
+
+# 異常系: 存在しない id は 404 not_found
+curl -i localhost:8080/entries/999
+
+# 異常系: バリデーション違反は 400（kind は til | diary のみ、title / entry_date / kind は必須）
+curl -H 'Content-Type: application/json' localhost:8080/entries -d '{"title":"x"}'
+```
+
 ## 関連
 
 - 目標・進め方・週次の計画は [life](https://github.com/e601201/life) リポジトリの `state/` に置いている

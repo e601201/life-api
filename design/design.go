@@ -26,10 +26,10 @@ var _ = Service("health", func() {
 
 // Journal type definition
 var Journal = Type("Journal", func() {
-    Description("A journal entry")
+	Description("A journal entry")
 
 	// id / entry_date(記録日) / kind（til or diary）/ title / body / created_at / updated_at
-    // tags 現状では入れない
+	// tags 現状では入れない
 	// idは自動採番されるので、クライアントからは送信されない
 	// user_idは今のうちに入れておく。
 	Attribute("id", Int64)
@@ -37,13 +37,13 @@ var Journal = Type("Journal", func() {
 	Attribute("kind", String, func() {
 		Enum("til", "diary")
 	})
-    Attribute("title", String)
-    Attribute("body", String)
-    Attribute("created_at", String)
-    Attribute("updated_at", String)
+	Attribute("title", String)
+	Attribute("body", String)
+	Attribute("created_at", String)
+	Attribute("updated_at", String)
 	Attribute("user_id", Int64)
-    
-    Required("title", "entry_date", "kind")
+
+	Required("title", "entry_date", "kind")
 })
 
 // JournalにService entries に 5 メソッド(POST / GET list / GET one / PUT / DELETE)。
@@ -75,11 +75,12 @@ var _ = Service("entries", func() {
 		Description("Get a journal entry by ID")
 		Payload(Int64)
 		Result(Journal)
-        // idが存在しない場合は404を返す 
+		// idが存在しない場合は404を返す
+		Error("not_found")
 		HTTP(func() {
 			GET("/entries/{id}")
 			Response(StatusOK)
-			Response(StatusNotFound)
+			Response("not_found", StatusNotFound)
 		})
 	})
 
@@ -89,10 +90,11 @@ var _ = Service("entries", func() {
 		Result(Journal)
 
 		// idが存在しない場合は404を返す
+		Error("not_found")
 		HTTP(func() {
 			PUT("/entries/{id}")
 			Response(StatusOK)
-			Response(StatusNotFound)
+			Response("not_found", StatusNotFound)
 		})
 	})
 
@@ -101,10 +103,11 @@ var _ = Service("entries", func() {
 		Payload(Int64)
 
 		// idが存在しない場合は404を返す
+		Error("not_found")
 		HTTP(func() {
 			DELETE("/entries/{id}")
 			Response(StatusNoContent)
-			Response(StatusNotFound)
+			Response("not_found", StatusNotFound)
 		})
 	})
 })

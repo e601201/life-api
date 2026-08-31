@@ -179,6 +179,9 @@ func (c *Client) BuildGetRequest(ctx context.Context, v any) (*http.Request, err
 // DecodeGetResponse returns a decoder for responses returned by the entries
 // get endpoint. restoreBody controls whether the response body should be
 // restored after having been read.
+// DecodeGetResponse may return the following errors:
+//   - "not_found" (type *goa.ServiceError): http.StatusNotFound
+//   - error: internal error
 func DecodeGetResponse(decoder func(*http.Response) goahttp.Decoder, restoreBody bool) func(*http.Response) (any, error) {
 	return func(resp *http.Response) (any, error) {
 		if restoreBody {
@@ -196,19 +199,33 @@ func DecodeGetResponse(decoder func(*http.Response) goahttp.Decoder, restoreBody
 		switch resp.StatusCode {
 		case http.StatusOK:
 			var (
-				body GetOKResponseBody
+				body GetResponseBody
 				err  error
 			)
 			err = decoder(resp).Decode(&body)
 			if err != nil {
 				return nil, goahttp.ErrDecodingError("entries", "get", err)
 			}
-			err = ValidateGetOKResponseBody(&body)
+			err = ValidateGetResponseBody(&body)
 			if err != nil {
 				return nil, goahttp.ErrValidationError("entries", "get", err)
 			}
 			res := NewGetJournalOK(&body)
 			return res, nil
+		case http.StatusNotFound:
+			var (
+				body GetNotFoundResponseBody
+				err  error
+			)
+			err = decoder(resp).Decode(&body)
+			if err != nil {
+				return nil, goahttp.ErrDecodingError("entries", "get", err)
+			}
+			err = ValidateGetNotFoundResponseBody(&body)
+			if err != nil {
+				return nil, goahttp.ErrValidationError("entries", "get", err)
+			}
+			return nil, NewGetNotFound(&body)
 		default:
 			body, _ := io.ReadAll(resp.Body)
 			return nil, goahttp.ErrInvalidResponse("entries", "get", resp.StatusCode, string(body))
@@ -262,6 +279,9 @@ func EncodeUpdateRequest(encoder func(*http.Request) goahttp.Encoder) func(*http
 // DecodeUpdateResponse returns a decoder for responses returned by the entries
 // update endpoint. restoreBody controls whether the response body should be
 // restored after having been read.
+// DecodeUpdateResponse may return the following errors:
+//   - "not_found" (type *goa.ServiceError): http.StatusNotFound
+//   - error: internal error
 func DecodeUpdateResponse(decoder func(*http.Response) goahttp.Decoder, restoreBody bool) func(*http.Response) (any, error) {
 	return func(resp *http.Response) (any, error) {
 		if restoreBody {
@@ -279,19 +299,33 @@ func DecodeUpdateResponse(decoder func(*http.Response) goahttp.Decoder, restoreB
 		switch resp.StatusCode {
 		case http.StatusOK:
 			var (
-				body UpdateOKResponseBody
+				body UpdateResponseBody
 				err  error
 			)
 			err = decoder(resp).Decode(&body)
 			if err != nil {
 				return nil, goahttp.ErrDecodingError("entries", "update", err)
 			}
-			err = ValidateUpdateOKResponseBody(&body)
+			err = ValidateUpdateResponseBody(&body)
 			if err != nil {
 				return nil, goahttp.ErrValidationError("entries", "update", err)
 			}
 			res := NewUpdateJournalOK(&body)
 			return res, nil
+		case http.StatusNotFound:
+			var (
+				body UpdateNotFoundResponseBody
+				err  error
+			)
+			err = decoder(resp).Decode(&body)
+			if err != nil {
+				return nil, goahttp.ErrDecodingError("entries", "update", err)
+			}
+			err = ValidateUpdateNotFoundResponseBody(&body)
+			if err != nil {
+				return nil, goahttp.ErrValidationError("entries", "update", err)
+			}
+			return nil, NewUpdateNotFound(&body)
 		default:
 			body, _ := io.ReadAll(resp.Body)
 			return nil, goahttp.ErrInvalidResponse("entries", "update", resp.StatusCode, string(body))
@@ -327,6 +361,9 @@ func (c *Client) BuildDeleteRequest(ctx context.Context, v any) (*http.Request, 
 // DecodeDeleteResponse returns a decoder for responses returned by the entries
 // delete endpoint. restoreBody controls whether the response body should be
 // restored after having been read.
+// DecodeDeleteResponse may return the following errors:
+//   - "not_found" (type *goa.ServiceError): http.StatusNotFound
+//   - error: internal error
 func DecodeDeleteResponse(decoder func(*http.Response) goahttp.Decoder, restoreBody bool) func(*http.Response) (any, error) {
 	return func(resp *http.Response) (any, error) {
 		if restoreBody {
@@ -344,6 +381,20 @@ func DecodeDeleteResponse(decoder func(*http.Response) goahttp.Decoder, restoreB
 		switch resp.StatusCode {
 		case http.StatusNoContent:
 			return nil, nil
+		case http.StatusNotFound:
+			var (
+				body DeleteNotFoundResponseBody
+				err  error
+			)
+			err = decoder(resp).Decode(&body)
+			if err != nil {
+				return nil, goahttp.ErrDecodingError("entries", "delete", err)
+			}
+			err = ValidateDeleteNotFoundResponseBody(&body)
+			if err != nil {
+				return nil, goahttp.ErrValidationError("entries", "delete", err)
+			}
+			return nil, NewDeleteNotFound(&body)
 		default:
 			body, _ := io.ReadAll(resp.Body)
 			return nil, goahttp.ErrInvalidResponse("entries", "delete", resp.StatusCode, string(body))

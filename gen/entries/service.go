@@ -9,6 +9,8 @@ package entries
 
 import (
 	"context"
+
+	goa "goa.design/goa/v3/pkg"
 )
 
 // Journal entries service
@@ -51,4 +53,9 @@ type Journal struct {
 	CreatedAt *string
 	UpdatedAt *string
 	UserID    *int64
+}
+
+// MakeNotFound builds a goa.ServiceError from an error.
+func MakeNotFound(err error) *goa.ServiceError {
+	return goa.NewServiceError(err, "not_found", false, false, false)
 }

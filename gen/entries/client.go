@@ -54,6 +54,9 @@ func (c *Client) List(ctx context.Context) (res []*Journal, err error) {
 }
 
 // Get calls the "get" endpoint of the "entries" service.
+// Get may return the following errors:
+//   - "not_found" (type *goa.ServiceError)
+//   - error: internal error
 func (c *Client) Get(ctx context.Context, p int64) (res *Journal, err error) {
 	var ires any
 	ires, err = c.GetEndpoint(ctx, p)
@@ -64,6 +67,9 @@ func (c *Client) Get(ctx context.Context, p int64) (res *Journal, err error) {
 }
 
 // Update calls the "update" endpoint of the "entries" service.
+// Update may return the following errors:
+//   - "not_found" (type *goa.ServiceError)
+//   - error: internal error
 func (c *Client) Update(ctx context.Context, p *Journal) (res *Journal, err error) {
 	var ires any
 	ires, err = c.UpdateEndpoint(ctx, p)
@@ -74,6 +80,9 @@ func (c *Client) Update(ctx context.Context, p *Journal) (res *Journal, err erro
 }
 
 // Delete calls the "delete" endpoint of the "entries" service.
+// Delete may return the following errors:
+//   - "not_found" (type *goa.ServiceError)
+//   - error: internal error
 func (c *Client) Delete(ctx context.Context, p int64) (err error) {
 	_, err = c.DeleteEndpoint(ctx, p)
 	return

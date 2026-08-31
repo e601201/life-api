@@ -50,9 +50,9 @@ type CreateResponseBody struct {
 	UserID    *int64  `form:"user_id,omitempty" json:"user_id,omitempty" xml:"user_id,omitempty"`
 }
 
-// GetOKResponseBody is the type of the "entries" service "get" endpoint HTTP
+// GetResponseBody is the type of the "entries" service "get" endpoint HTTP
 // response body.
-type GetOKResponseBody struct {
+type GetResponseBody struct {
 	ID        *int64  `form:"id,omitempty" json:"id,omitempty" xml:"id,omitempty"`
 	EntryDate *string `form:"entry_date,omitempty" json:"entry_date,omitempty" xml:"entry_date,omitempty"`
 	Kind      *string `form:"kind,omitempty" json:"kind,omitempty" xml:"kind,omitempty"`
@@ -63,9 +63,9 @@ type GetOKResponseBody struct {
 	UserID    *int64  `form:"user_id,omitempty" json:"user_id,omitempty" xml:"user_id,omitempty"`
 }
 
-// UpdateOKResponseBody is the type of the "entries" service "update" endpoint
+// UpdateResponseBody is the type of the "entries" service "update" endpoint
 // HTTP response body.
-type UpdateOKResponseBody struct {
+type UpdateResponseBody struct {
 	ID        *int64  `form:"id,omitempty" json:"id,omitempty" xml:"id,omitempty"`
 	EntryDate *string `form:"entry_date,omitempty" json:"entry_date,omitempty" xml:"entry_date,omitempty"`
 	Kind      *string `form:"kind,omitempty" json:"kind,omitempty" xml:"kind,omitempty"`
@@ -74,34 +74,64 @@ type UpdateOKResponseBody struct {
 	CreatedAt *string `form:"created_at,omitempty" json:"created_at,omitempty" xml:"created_at,omitempty"`
 	UpdatedAt *string `form:"updated_at,omitempty" json:"updated_at,omitempty" xml:"updated_at,omitempty"`
 	UserID    *int64  `form:"user_id,omitempty" json:"user_id,omitempty" xml:"user_id,omitempty"`
+}
+
+// GetNotFoundResponseBody is the type of the "entries" service "get" endpoint
+// HTTP response body for the "not_found" error.
+type GetNotFoundResponseBody struct {
+	// Name is the name of this class of errors.
+	Name *string `form:"name,omitempty" json:"name,omitempty" xml:"name,omitempty"`
+	// ID is a unique identifier for this particular occurrence of the problem.
+	ID *string `form:"id,omitempty" json:"id,omitempty" xml:"id,omitempty"`
+	// Message is a human-readable explanation specific to this occurrence of the
+	// problem.
+	Message *string `form:"message,omitempty" json:"message,omitempty" xml:"message,omitempty"`
+	// Is the error temporary?
+	Temporary *bool `form:"temporary,omitempty" json:"temporary,omitempty" xml:"temporary,omitempty"`
+	// Is the error a timeout?
+	Timeout *bool `form:"timeout,omitempty" json:"timeout,omitempty" xml:"timeout,omitempty"`
+	// Is the error a server-side fault?
+	Fault *bool `form:"fault,omitempty" json:"fault,omitempty" xml:"fault,omitempty"`
+}
+
+// UpdateNotFoundResponseBody is the type of the "entries" service "update"
+// endpoint HTTP response body for the "not_found" error.
+type UpdateNotFoundResponseBody struct {
+	// Name is the name of this class of errors.
+	Name *string `form:"name,omitempty" json:"name,omitempty" xml:"name,omitempty"`
+	// ID is a unique identifier for this particular occurrence of the problem.
+	ID *string `form:"id,omitempty" json:"id,omitempty" xml:"id,omitempty"`
+	// Message is a human-readable explanation specific to this occurrence of the
+	// problem.
+	Message *string `form:"message,omitempty" json:"message,omitempty" xml:"message,omitempty"`
+	// Is the error temporary?
+	Temporary *bool `form:"temporary,omitempty" json:"temporary,omitempty" xml:"temporary,omitempty"`
+	// Is the error a timeout?
+	Timeout *bool `form:"timeout,omitempty" json:"timeout,omitempty" xml:"timeout,omitempty"`
+	// Is the error a server-side fault?
+	Fault *bool `form:"fault,omitempty" json:"fault,omitempty" xml:"fault,omitempty"`
+}
+
+// DeleteNotFoundResponseBody is the type of the "entries" service "delete"
+// endpoint HTTP response body for the "not_found" error.
+type DeleteNotFoundResponseBody struct {
+	// Name is the name of this class of errors.
+	Name *string `form:"name,omitempty" json:"name,omitempty" xml:"name,omitempty"`
+	// ID is a unique identifier for this particular occurrence of the problem.
+	ID *string `form:"id,omitempty" json:"id,omitempty" xml:"id,omitempty"`
+	// Message is a human-readable explanation specific to this occurrence of the
+	// problem.
+	Message *string `form:"message,omitempty" json:"message,omitempty" xml:"message,omitempty"`
+	// Is the error temporary?
+	Temporary *bool `form:"temporary,omitempty" json:"temporary,omitempty" xml:"temporary,omitempty"`
+	// Is the error a timeout?
+	Timeout *bool `form:"timeout,omitempty" json:"timeout,omitempty" xml:"timeout,omitempty"`
+	// Is the error a server-side fault?
+	Fault *bool `form:"fault,omitempty" json:"fault,omitempty" xml:"fault,omitempty"`
 }
 
 // JournalResponse is used to define fields on response body types.
 type JournalResponse struct {
-	ID        *int64  `form:"id,omitempty" json:"id,omitempty" xml:"id,omitempty"`
-	EntryDate *string `form:"entry_date,omitempty" json:"entry_date,omitempty" xml:"entry_date,omitempty"`
-	Kind      *string `form:"kind,omitempty" json:"kind,omitempty" xml:"kind,omitempty"`
-	Title     *string `form:"title,omitempty" json:"title,omitempty" xml:"title,omitempty"`
-	Body      *string `form:"body,omitempty" json:"body,omitempty" xml:"body,omitempty"`
-	CreatedAt *string `form:"created_at,omitempty" json:"created_at,omitempty" xml:"created_at,omitempty"`
-	UpdatedAt *string `form:"updated_at,omitempty" json:"updated_at,omitempty" xml:"updated_at,omitempty"`
-	UserID    *int64  `form:"user_id,omitempty" json:"user_id,omitempty" xml:"user_id,omitempty"`
-}
-
-// GetNotFoundResponseBody is used to define fields on response body types.
-type GetNotFoundResponseBody struct {
-	ID        *int64  `form:"id,omitempty" json:"id,omitempty" xml:"id,omitempty"`
-	EntryDate *string `form:"entry_date,omitempty" json:"entry_date,omitempty" xml:"entry_date,omitempty"`
-	Kind      *string `form:"kind,omitempty" json:"kind,omitempty" xml:"kind,omitempty"`
-	Title     *string `form:"title,omitempty" json:"title,omitempty" xml:"title,omitempty"`
-	Body      *string `form:"body,omitempty" json:"body,omitempty" xml:"body,omitempty"`
-	CreatedAt *string `form:"created_at,omitempty" json:"created_at,omitempty" xml:"created_at,omitempty"`
-	UpdatedAt *string `form:"updated_at,omitempty" json:"updated_at,omitempty" xml:"updated_at,omitempty"`
-	UserID    *int64  `form:"user_id,omitempty" json:"user_id,omitempty" xml:"user_id,omitempty"`
-}
-
-// UpdateNotFoundResponseBody is used to define fields on response body types.
-type UpdateNotFoundResponseBody struct {
 	ID        *int64  `form:"id,omitempty" json:"id,omitempty" xml:"id,omitempty"`
 	EntryDate *string `form:"entry_date,omitempty" json:"entry_date,omitempty" xml:"entry_date,omitempty"`
 	Kind      *string `form:"kind,omitempty" json:"kind,omitempty" xml:"kind,omitempty"`
@@ -177,7 +207,7 @@ func NewListJournalOK(body []*JournalResponse) []*entries.Journal {
 
 // NewGetJournalOK builds a "entries" service "get" endpoint result from a HTTP
 // "OK" response.
-func NewGetJournalOK(body *GetOKResponseBody) *entries.Journal {
+func NewGetJournalOK(body *GetResponseBody) *entries.Journal {
 	v := &entries.Journal{
 		ID:        body.ID,
 		EntryDate: *body.EntryDate,
@@ -192,9 +222,23 @@ func NewGetJournalOK(body *GetOKResponseBody) *entries.Journal {
 	return v
 }
 
+// NewGetNotFound builds a entries service get endpoint not_found error.
+func NewGetNotFound(body *GetNotFoundResponseBody) *goa.ServiceError {
+	v := &goa.ServiceError{
+		Name:      *body.Name,
+		ID:        *body.ID,
+		Message:   *body.Message,
+		Temporary: *body.Temporary,
+		Timeout:   *body.Timeout,
+		Fault:     *body.Fault,
+	}
+
+	return v
+}
+
 // NewUpdateJournalOK builds a "entries" service "update" endpoint result from
 // a HTTP "OK" response.
-func NewUpdateJournalOK(body *UpdateOKResponseBody) *entries.Journal {
+func NewUpdateJournalOK(body *UpdateResponseBody) *entries.Journal {
 	v := &entries.Journal{
 		ID:        body.ID,
 		EntryDate: *body.EntryDate,
@@ -204,6 +248,34 @@ func NewUpdateJournalOK(body *UpdateOKResponseBody) *entries.Journal {
 		CreatedAt: body.CreatedAt,
 		UpdatedAt: body.UpdatedAt,
 		UserID:    body.UserID,
+	}
+
+	return v
+}
+
+// NewUpdateNotFound builds a entries service update endpoint not_found error.
+func NewUpdateNotFound(body *UpdateNotFoundResponseBody) *goa.ServiceError {
+	v := &goa.ServiceError{
+		Name:      *body.Name,
+		ID:        *body.ID,
+		Message:   *body.Message,
+		Temporary: *body.Temporary,
+		Timeout:   *body.Timeout,
+		Fault:     *body.Fault,
+	}
+
+	return v
+}
+
+// NewDeleteNotFound builds a entries service delete endpoint not_found error.
+func NewDeleteNotFound(body *DeleteNotFoundResponseBody) *goa.ServiceError {
+	v := &goa.ServiceError{
+		Name:      *body.Name,
+		ID:        *body.ID,
+		Message:   *body.Message,
+		Temporary: *body.Temporary,
+		Timeout:   *body.Timeout,
+		Fault:     *body.Fault,
 	}
 
 	return v
@@ -228,8 +300,8 @@ func ValidateCreateResponseBody(body *CreateResponseBody) (err error) {
 	return
 }
 
-// ValidateGetOKResponseBody runs the validations defined on GetOKResponseBody
-func ValidateGetOKResponseBody(body *GetOKResponseBody) (err error) {
+// ValidateGetResponseBody runs the validations defined on GetResponseBody
+func ValidateGetResponseBody(body *GetResponseBody) (err error) {
 	if body.Title == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("title", "body"))
 	}
@@ -247,9 +319,8 @@ func ValidateGetOKResponseBody(body *GetOKResponseBody) (err error) {
 	return
 }
 
-// ValidateUpdateOKResponseBody runs the validations defined on
-// UpdateOKResponseBody
-func ValidateUpdateOKResponseBody(body *UpdateOKResponseBody) (err error) {
+// ValidateUpdateResponseBody runs the validations defined on UpdateResponseBody
+func ValidateUpdateResponseBody(body *UpdateResponseBody) (err error) {
 	if body.Title == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("title", "body"))
 	}
@@ -263,52 +334,84 @@ func ValidateUpdateOKResponseBody(body *UpdateOKResponseBody) (err error) {
 		if !(*body.Kind == "til" || *body.Kind == "diary") {
 			err = goa.MergeErrors(err, goa.InvalidEnumValueError("body.kind", *body.Kind, []any{"til", "diary"}))
 		}
+	}
+	return
+}
+
+// ValidateGetNotFoundResponseBody runs the validations defined on
+// get_not_found_response_body
+func ValidateGetNotFoundResponseBody(body *GetNotFoundResponseBody) (err error) {
+	if body.Name == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("name", "body"))
+	}
+	if body.ID == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("id", "body"))
+	}
+	if body.Message == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("message", "body"))
+	}
+	if body.Temporary == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("temporary", "body"))
+	}
+	if body.Timeout == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("timeout", "body"))
+	}
+	if body.Fault == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("fault", "body"))
+	}
+	return
+}
+
+// ValidateUpdateNotFoundResponseBody runs the validations defined on
+// update_not_found_response_body
+func ValidateUpdateNotFoundResponseBody(body *UpdateNotFoundResponseBody) (err error) {
+	if body.Name == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("name", "body"))
+	}
+	if body.ID == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("id", "body"))
+	}
+	if body.Message == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("message", "body"))
+	}
+	if body.Temporary == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("temporary", "body"))
+	}
+	if body.Timeout == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("timeout", "body"))
+	}
+	if body.Fault == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("fault", "body"))
+	}
+	return
+}
+
+// ValidateDeleteNotFoundResponseBody runs the validations defined on
+// delete_not_found_response_body
+func ValidateDeleteNotFoundResponseBody(body *DeleteNotFoundResponseBody) (err error) {
+	if body.Name == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("name", "body"))
+	}
+	if body.ID == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("id", "body"))
+	}
+	if body.Message == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("message", "body"))
+	}
+	if body.Temporary == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("temporary", "body"))
+	}
+	if body.Timeout == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("timeout", "body"))
+	}
+	if body.Fault == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("fault", "body"))
 	}
 	return
 }
 
 // ValidateJournalResponse runs the validations defined on JournalResponse
 func ValidateJournalResponse(body *JournalResponse) (err error) {
-	if body.Title == nil {
-		err = goa.MergeErrors(err, goa.MissingFieldError("title", "body"))
-	}
-	if body.EntryDate == nil {
-		err = goa.MergeErrors(err, goa.MissingFieldError("entry_date", "body"))
-	}
-	if body.Kind == nil {
-		err = goa.MergeErrors(err, goa.MissingFieldError("kind", "body"))
-	}
-	if body.Kind != nil {
-		if !(*body.Kind == "til" || *body.Kind == "diary") {
-			err = goa.MergeErrors(err, goa.InvalidEnumValueError("body.kind", *body.Kind, []any{"til", "diary"}))
-		}
-	}
-	return
-}
-
-// ValidateGetNotFoundResponseBody runs the validations defined on GetNot
-// FoundResponseBody
-func ValidateGetNotFoundResponseBody(body *GetNotFoundResponseBody) (err error) {
-	if body.Title == nil {
-		err = goa.MergeErrors(err, goa.MissingFieldError("title", "body"))
-	}
-	if body.EntryDate == nil {
-		err = goa.MergeErrors(err, goa.MissingFieldError("entry_date", "body"))
-	}
-	if body.Kind == nil {
-		err = goa.MergeErrors(err, goa.MissingFieldError("kind", "body"))
-	}
-	if body.Kind != nil {
-		if !(*body.Kind == "til" || *body.Kind == "diary") {
-			err = goa.MergeErrors(err, goa.InvalidEnumValueError("body.kind", *body.Kind, []any{"til", "diary"}))
-		}
-	}
-	return
-}
-
-// ValidateUpdateNotFoundResponseBody runs the validations defined on UpdateNot
-// FoundResponseBody
-func ValidateUpdateNotFoundResponseBody(body *UpdateNotFoundResponseBody) (err error) {
 	if body.Title == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("title", "body"))
 	}

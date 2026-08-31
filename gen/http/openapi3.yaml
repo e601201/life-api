@@ -146,7 +146,11 @@ paths:
                 "204":
                     description: No Content response.
                 "404":
-                    description: Not Found response.
+                    description: 'not_found: Not Found response.'
+                    content:
+                        application/vnd.goa.error:
+                            schema:
+                                $ref: '#/components/schemas/Error'
         get:
             tags:
                 - entries
@@ -170,29 +174,20 @@ paths:
                             schema:
                                 $ref: '#/components/schemas/Journal'
                             example:
-                                body: Nihil quos deserunt minus fugit sit similique.
-                                created_at: Consequuntur harum nihil.
-                                entry_date: Ut voluptatem ut est vel aut.
-                                id: 664275288160194382
+                                body: Omnis eum.
+                                created_at: Quis rerum id nobis quidem.
+                                entry_date: Occaecati sit officiis.
+                                id: 1508954127712631977
                                 kind: til
-                                title: Rem accusamus odio id beatae.
-                                updated_at: Et et dolorem animi possimus ut voluptas.
-                                user_id: 7662334440039855546
+                                title: Expedita deleniti porro non voluptates.
+                                updated_at: Sint et sed nihil enim laboriosam porro.
+                                user_id: 1741871451947034476
                 "404":
-                    description: Not Found response.
+                    description: 'not_found: Not Found response.'
                     content:
-                        application/json:
+                        application/vnd.goa.error:
                             schema:
-                                $ref: '#/components/schemas/Journal'
-                            example:
-                                body: Quibusdam eum aspernatur alias reiciendis nostrum aut.
-                                created_at: Ut ut officiis molestiae.
-                                entry_date: Possimus et est incidunt autem et.
-                                id: 6722970006234963632
-                                kind: diary
-                                title: Ipsum dolor totam omnis quod velit et.
-                                updated_at: Error quod illo voluptatem eos hic aut.
-                                user_id: 6589088224933390692
+                                $ref: '#/components/schemas/Error'
         put:
             tags:
                 - entries
@@ -231,29 +226,20 @@ paths:
                             schema:
                                 $ref: '#/components/schemas/Journal'
                             example:
-                                body: Ipsum quasi repellat et.
-                                created_at: Temporibus quam omnis dolores.
-                                entry_date: Molestias laudantium.
-                                id: 5010681738763486882
+                                body: Eveniet totam sit quia.
+                                created_at: Aperiam et maxime aut blanditiis est.
+                                entry_date: Enim aliquam ut et.
+                                id: 6373734996410084234
                                 kind: diary
-                                title: Ut ut sint animi saepe est.
-                                updated_at: Accusamus vel quas dolorem aut.
-                                user_id: 9125216452688490707
+                                title: Ipsam harum nemo.
+                                updated_at: Deserunt ut ut sed deleniti.
+                                user_id: 3366940458952493031
                 "404":
-                    description: Not Found response.
+                    description: 'not_found: Not Found response.'
                     content:
-                        application/json:
+                        application/vnd.goa.error:
                             schema:
-                                $ref: '#/components/schemas/Journal'
-                            example:
-                                body: Recusandae aut et.
-                                created_at: Quaerat culpa tenetur neque delectus.
-                                entry_date: Sequi voluptatem nesciunt omnis.
-                                id: 9193537116151950188
-                                kind: diary
-                                title: In et enim dolor.
-                                updated_at: Expedita quasi voluptate nemo sit sed sint.
-                                user_id: 3939037059556628162
+                                $ref: '#/components/schemas/Error'
     /health:
         get:
             tags:
@@ -273,6 +259,48 @@ paths:
                             example: Numquam sint nulla dolores similique est.
 components:
     schemas:
+        Error:
+            type: object
+            properties:
+                fault:
+                    type: boolean
+                    description: Is the error a server-side fault?
+                    example: true
+                id:
+                    type: string
+                    description: ID is a unique identifier for this particular occurrence of the problem.
+                    example: 123abc
+                message:
+                    type: string
+                    description: Message is a human-readable explanation specific to this occurrence of the problem.
+                    example: parameter 'p' must be an integer
+                name:
+                    type: string
+                    description: Name is the name of this class of errors.
+                    example: bad_request
+                temporary:
+                    type: boolean
+                    description: Is the error temporary?
+                    example: false
+                timeout:
+                    type: boolean
+                    description: Is the error a timeout?
+                    example: true
+            description: Error response result type
+            example:
+                fault: true
+                id: 123abc
+                message: parameter 'p' must be an integer
+                name: bad_request
+                temporary: false
+                timeout: true
+            required:
+                - name
+                - id
+                - message
+                - temporary
+                - timeout
+                - fault
         Journal:
             type: object
             properties:
