@@ -86,6 +86,25 @@ db/migrations/000002_create_tags.down.sql
   API 名やメソッド名を変えたときは `goa gen` だけ流し、`cmd/` と実装は手で追随させる
 - `gen/` はコミットする。Docker のビルドステージで goa CLI を入れずに済むため
 
+### テスト
+
+`entries` の CRUD は実際の PostgreSQL に対して流す。確かめたいものが SQL 側
+（`date` へのキャスト、`RETURNING`、`pgx.ErrNoRows`、インデックスに合わせた並び）に
+寄っているため、DB をモックすると肝心なところが残らない。
+
+接続先は `TEST_DATABASE_URL` で渡す。**テストは `entries` テーブルを空にする**ので、
+開発用の DB とは別のデータベースを指すこと。`DATABASE_URL` ではなく専用の変数を
+見ているのは、取り違えて開発中のデータを消さないため。
+
+```sh
+docker compose exec db psql -U life -d postgres -c 'CREATE DATABASE life_test'
+TEST_DATABASE_URL='postgres://life:life@localhost:5432/life_test?sslmode=disable' go test ./...
+```
+
+`TEST_DATABASE_URL` が空のときは skip する（DB の無い環境でも `go test ./...` が
+通るようにするため）。スキーマはテストの開始時に `db.Up` で適用するので、
+マイグレーションを足したときも手当ては要らない。
+
 ### 打鍵確認（curl）
 
 entries の CRUD は `entries` テーブルへの読み書き（`entries.go`）。プロセスを再起動しても

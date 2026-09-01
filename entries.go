@@ -28,7 +28,7 @@ func NewEntries(pool *pgxpool.Pool) entries.Service {
 const journalColumns = `id, user_id, entry_date, kind, title, body, created_at, updated_at`
 
 // dateLayout は DSL の Format(FormatDate) に対応する表現。日時のほうは
-// Format(FormatDateTime) = RFC 3339 なので time.RFC3339 をそのまま使う。
+// Format(FormatDateTime) = RFC 3339 で、小数部を持てるので time.RFC3339Nano を使う。
 const dateLayout = "2006-01-02"
 
 // notFound builds the not_found error declared in the design.
@@ -58,8 +58,12 @@ func scanJournal(row pgx.Row) (*entries.Journal, error) {
 	}
 
 	// timestamptz は接続のタイムゾーンで返るため、UTC に寄せてから文字列にする。
-	created := createdAt.UTC().Format(time.RFC3339)
-	updated := updatedAt.UTC().Format(time.RFC3339)
+	//
+	// 秒精度（time.RFC3339Nano）だと、作成した同じ秒のうちに更新したとき created_at と
+	// updated_at が同じ値になり、更新されたことが読み取れない。DB は
+	// マイクロ秒まで持っているので、落とさずに出す。
+	created := createdAt.UTC().Format(time.RFC3339Nano)
+	updated := updatedAt.UTC().Format(time.RFC3339Nano)
 
 	return &entries.Journal{
 		ID:        &id,
