@@ -9,6 +9,9 @@
 
 # api と migrate で同じ接続先を使う。片方だけ直して食い違うのを避けるため、
 # YAML のアンカーで 1 箇所にまとめている。
+#
+# ここは素の文字列結合なので、パスワードに @ : / ? # が入ると URL の区切りとして
+# 解釈されて壊れる。.env に書くときは percent-encode すること（.env.example 参照）。
 x-database-url: &database-url
   DATABASE_URL: postgres://${POSTGRES_USER:-life}:${POSTGRES_PASSWORD:-life}@db:5432/${POSTGRES_DB:-life}?sslmode=disable
 

@@ -93,10 +93,15 @@ func (c *Client) Create() goa.Endpoint {
 // list server.
 func (c *Client) List() goa.Endpoint {
 	var (
+		encodeRequest  = EncodeListRequest(c.encoder)
 		decodeResponse = DecodeListResponse(c.decoder, c.RestoreResponseBody)
 	)
 	return func(ctx context.Context, v any) (any, error) {
 		req, err := c.BuildListRequest(ctx, v)
+		if err != nil {
+			return nil, err
+		}
+		err = encodeRequest(req, v)
 		if err != nil {
 			return nil, err
 		}

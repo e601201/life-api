@@ -6,3 +6,39 @@
 // $ goa gen github.com/e601201/life-api/design
 
 package server
+
+import (
+	goa "goa.design/goa/v3/pkg"
+)
+
+// CheckServiceUnavailableResponseBody is the type of the "health" service
+// "check" endpoint HTTP response body for the "service_unavailable" error.
+type CheckServiceUnavailableResponseBody struct {
+	// Name is the name of this class of errors.
+	Name string `form:"name" json:"name" xml:"name"`
+	// ID is a unique identifier for this particular occurrence of the problem.
+	ID string `form:"id" json:"id" xml:"id"`
+	// Message is a human-readable explanation specific to this occurrence of the
+	// problem.
+	Message string `form:"message" json:"message" xml:"message"`
+	// Is the error temporary?
+	Temporary bool `form:"temporary" json:"temporary" xml:"temporary"`
+	// Is the error a timeout?
+	Timeout bool `form:"timeout" json:"timeout" xml:"timeout"`
+	// Is the error a server-side fault?
+	Fault bool `form:"fault" json:"fault" xml:"fault"`
+}
+
+// NewCheckServiceUnavailableResponseBody builds the HTTP response body from
+// the result of the "check" endpoint of the "health" service.
+func NewCheckServiceUnavailableResponseBody(res *goa.ServiceError) *CheckServiceUnavailableResponseBody {
+	body := &CheckServiceUnavailableResponseBody{
+		Name:      res.Name,
+		ID:        res.ID,
+		Message:   res.Message,
+		Temporary: res.Temporary,
+		Timeout:   res.Timeout,
+		Fault:     res.Fault,
+	}
+	return body
+}

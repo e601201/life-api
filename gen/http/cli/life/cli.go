@@ -55,7 +55,9 @@ func ParseEndpoint(
 		entriesCreateFlags    = flag.NewFlagSet("create", flag.ExitOnError)
 		entriesCreateBodyFlag = entriesCreateFlags.String("body", "REQUIRED", "")
 
-		entriesListFlags = flag.NewFlagSet("list", flag.ExitOnError)
+		entriesListFlags      = flag.NewFlagSet("list", flag.ExitOnError)
+		entriesListLimitFlag  = entriesListFlags.String("limit", "10", "")
+		entriesListOffsetFlag = entriesListFlags.String("offset", "", "")
 
 		entriesGetFlags  = flag.NewFlagSet("get", flag.ExitOnError)
 		entriesGetIDFlag = entriesGetFlags.String("id", "REQUIRED", "Entry ID")
@@ -171,6 +173,7 @@ func ParseEndpoint(
 				data, err = entriesc.BuildCreatePayload(*entriesCreateBodyFlag)
 			case "list":
 				endpoint = c.List()
+				data, err = entriesc.BuildListPayload(*entriesListLimitFlag, *entriesListOffsetFlag)
 			case "get":
 				endpoint = c.Get()
 				data, err = entriesc.BuildGetPayload(*entriesGetIDFlag)
@@ -195,7 +198,7 @@ func healthUsage() {
 	fmt.Fprintln(os.Stderr, `health check this server`)
 	fmt.Fprintf(os.Stderr, "Usage:\n    %s [globalflags] health COMMAND [flags]\n\n", os.Args[0])
 	fmt.Fprintln(os.Stderr, "COMMAND:")
-	fmt.Fprintln(os.Stderr, `    check: Return OK if the server is alive.`)
+	fmt.Fprintln(os.Stderr, `    check: Return OK if the server and its database are alive.`)
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, "Additional help:")
 	fmt.Fprintf(os.Stderr, "    %s health COMMAND --help\n", os.Args[0])
@@ -207,7 +210,7 @@ func healthCheckUsage() {
 
 	// Description
 	fmt.Fprintln(os.Stderr)
-	fmt.Fprintln(os.Stderr, `Return OK if the server is alive.`)
+	fmt.Fprintln(os.Stderr, `Return OK if the server and its database are alive.`)
 
 	// Flags list
 
@@ -222,7 +225,7 @@ func entriesUsage() {
 	fmt.Fprintf(os.Stderr, "Usage:\n    %s [globalflags] entries COMMAND [flags]\n\n", os.Args[0])
 	fmt.Fprintln(os.Stderr, "COMMAND:")
 	fmt.Fprintln(os.Stderr, `    create: Create a new journal entry`)
-	fmt.Fprintln(os.Stderr, `    list: List all journal entries`)
+	fmt.Fprintln(os.Stderr, `    list: List journal entries`)
 	fmt.Fprintln(os.Stderr, `    get: Get a journal entry by ID`)
 	fmt.Fprintln(os.Stderr, `    update: Update a journal entry by ID`)
 	fmt.Fprintln(os.Stderr, `    delete: Delete a journal entry by ID`)
@@ -251,17 +254,21 @@ func entriesCreateUsage() {
 func entriesListUsage() {
 	// Header with flags
 	fmt.Fprintf(os.Stderr, "%s [flags] entries list", os.Args[0])
+	fmt.Fprint(os.Stderr, " -limit INT")
+	fmt.Fprint(os.Stderr, " -offset INT")
 	fmt.Fprintln(os.Stderr)
 
 	// Description
 	fmt.Fprintln(os.Stderr)
-	fmt.Fprintln(os.Stderr, `List all journal entries`)
+	fmt.Fprintln(os.Stderr, `List journal entries`)
 
 	// Flags list
+	fmt.Fprintln(os.Stderr, `    -limit INT: `)
+	fmt.Fprintln(os.Stderr, `    -offset INT: `)
 
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, "Example:")
-	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "entries list")
+	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "entries list --limit 15 --offset 1831350278493953792")
 }
 
 func entriesGetUsage() {

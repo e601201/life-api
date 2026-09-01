@@ -44,9 +44,9 @@ func (c *Client) Create(ctx context.Context, p *EntryRequest) (res *CreateResult
 }
 
 // List calls the "list" endpoint of the "entries" service.
-func (c *Client) List(ctx context.Context) (res []*Journal, err error) {
+func (c *Client) List(ctx context.Context, p *ListPayload) (res []*Journal, err error) {
 	var ires any
-	ires, err = c.ListEndpoint(ctx, nil)
+	ires, err = c.ListEndpoint(ctx, p)
 	if err != nil {
 		return
 	}

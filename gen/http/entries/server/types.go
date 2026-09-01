@@ -263,6 +263,15 @@ func NewCreateEntryRequest(body *CreateRequestBody) *entries.EntryRequest {
 	return v
 }
 
+// NewListPayload builds a entries service list endpoint payload.
+func NewListPayload(limit int, offset int) *entries.ListPayload {
+	v := &entries.ListPayload{}
+	v.Limit = limit
+	v.Offset = offset
+
+	return v
+}
+
 // NewGetPayload builds a entries service get endpoint payload.
 func NewGetPayload(id int64) *entries.GetPayload {
 	v := &entries.GetPayload{}

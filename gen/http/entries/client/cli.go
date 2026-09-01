@@ -48,6 +48,54 @@ func BuildCreatePayload(entriesCreateBody string) (*entries.EntryRequest, error)
 	return v, nil
 }
 
+// BuildListPayload builds the payload for the entries list endpoint from CLI
+// flags.
+func BuildListPayload(entriesListLimit string, entriesListOffset string) (*entries.ListPayload, error) {
+	var err error
+	var limit int
+	{
+		if entriesListLimit != "" {
+			var v int64
+			v, err = strconv.ParseInt(entriesListLimit, 10, strconv.IntSize)
+			limit = int(v)
+			if err != nil {
+				return nil, fmt.Errorf("invalid value for limit, must be INT")
+			}
+			if limit < 1 {
+				err = goa.MergeErrors(err, goa.InvalidRangeError("limit", limit, 1, true))
+			}
+			if limit > 100 {
+				err = goa.MergeErrors(err, goa.InvalidRangeError("limit", limit, 100, false))
+			}
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	var offset int
+	{
+		if entriesListOffset != "" {
+			var v int64
+			v, err = strconv.ParseInt(entriesListOffset, 10, strconv.IntSize)
+			offset = int(v)
+			if err != nil {
+				return nil, fmt.Errorf("invalid value for offset, must be INT")
+			}
+			if offset < 0 {
+				err = goa.MergeErrors(err, goa.InvalidRangeError("offset", offset, 0, true))
+			}
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	v := &entries.ListPayload{}
+	v.Limit = limit
+	v.Offset = offset
+
+	return v, nil
+}
+
 // BuildGetPayload builds the payload for the entries get endpoint from CLI
 // flags.
 func BuildGetPayload(entriesGetID string) (*entries.GetPayload, error) {

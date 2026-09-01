@@ -10,6 +10,7 @@ package client
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -114,6 +115,22 @@ func (c *Client) BuildListRequest(ctx context.Context, v any) (*http.Request, er
 	}
 
 	return req, nil
+}
+
+// EncodeListRequest returns an encoder for requests sent to the entries list
+// server.
+func EncodeListRequest(encoder func(*http.Request) goahttp.Encoder) func(*http.Request, any) error {
+	return func(req *http.Request, v any) error {
+		p, ok := v.(*entries.ListPayload)
+		if !ok {
+			return goahttp.ErrInvalidType("entries", "list", "*entries.ListPayload", v)
+		}
+		values := req.URL.Query()
+		values.Add("limit", fmt.Sprintf("%v", p.Limit))
+		values.Add("offset", fmt.Sprintf("%v", p.Offset))
+		req.URL.RawQuery = values.Encode()
+		return nil
+	}
 }
 
 // DecodeListResponse returns a decoder for responses returned by the entries

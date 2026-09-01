@@ -25,8 +25,12 @@ import (
 )
 
 // testPool は TEST_DATABASE_URL が指す DB への接続。未設定なら nil のままで、
-// 各テストは newService で skip する。
-var testPool *pgxpool.Pool
+// 各テストは requireDB で skip する。testDBURL は、別の接続を張りたいテスト
+// （health の異常系）が使う。
+var (
+	testPool  *pgxpool.Pool
+	testDBURL string
+)
 
 func TestMain(m *testing.M) {
 	url := os.Getenv("TEST_DATABASE_URL")
@@ -46,19 +50,26 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 	testPool = pool
+	testDBURL = url
 
 	code := m.Run()
 	pool.Close()
 	os.Exit(code)
 }
 
-// newService はテスト用のサービスを返す。テーブルを空にし、id の採番も 1 に戻すので、
-// テストごとに同じ前提から始められる。
-func newService(t *testing.T) (entries.Service, context.Context) {
+// requireDB は DB を使うテストの入口。接続先が渡されていなければ skip する。
+func requireDB(t *testing.T) {
 	t.Helper()
 	if testPool == nil {
 		t.Skip("TEST_DATABASE_URL が未設定のためスキップ")
 	}
+}
+
+// newService はテスト用のサービスを返す。テーブルを空にし、id の採番も 1 に戻すので、
+// テストごとに同じ前提から始められる。
+func newService(t *testing.T) (entries.Service, context.Context) {
+	t.Helper()
+	requireDB(t)
 	ctx := context.Background()
 	if _, err := testPool.Exec(ctx, "TRUNCATE entries RESTART IDENTITY"); err != nil {
 		t.Fatalf("truncate entries: %v", err)
@@ -103,17 +114,19 @@ func derefInt64(p *int64) string {
 	return fmt.Sprint(*p)
 }
 
-// requireNotFound は design で宣言した not_found が返っていることを確かめる。
-// ここが素の error だと、HTTP では 404 ではなく 500 になる。
-func requireNotFound(t *testing.T, err error) {
+// requireErrorName は design で宣言したエラーが返っていることを確かめ、その
+// ServiceError を返す。ここが素の error だと、HTTP では宣言したステータス
+// （404 / 503）ではなく 500 になる。
+func requireErrorName(t *testing.T, err error, want string) *goa.ServiceError {
 	t.Helper()
 	var serr *goa.ServiceError
 	if !errors.As(err, &serr) {
 		t.Fatalf("goa のエラーではない: %v", err)
 	}
-	if serr.Name != "not_found" {
-		t.Fatalf("error name = %q, want %q", serr.Name, "not_found")
+	if serr.Name != want {
+		t.Fatalf("error name = %q, want %q", serr.Name, want)
 	}
+	return serr
 }
 
 func TestCreate(t *testing.T) {
@@ -184,7 +197,7 @@ func TestCreateWithoutBody(t *testing.T) {
 func TestListEmpty(t *testing.T) {
 	svc, ctx := newService(t)
 
-	got, err := svc.List(ctx)
+	got, err := svc.List(ctx, &entries.ListPayload{Limit: 10})
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -204,7 +217,7 @@ func TestListOrder(t *testing.T) {
 	sameDayFirst := mustCreate(t, ctx, svc, "2026-09-01", "同じ日付の先")
 	sameDayLast := mustCreate(t, ctx, svc, "2026-09-01", "同じ日付の後")
 
-	got, err := svc.List(ctx)
+	got, err := svc.List(ctx, &entries.ListPayload{Limit: 10})
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -226,7 +239,7 @@ func TestGetNotFound(t *testing.T) {
 	svc, ctx := newService(t)
 
 	_, err := svc.Get(ctx, &entries.GetPayload{ID: 999})
-	requireNotFound(t, err)
+	requireErrorName(t, err, "not_found")
 }
 
 func TestUpdate(t *testing.T) {
@@ -301,7 +314,7 @@ func TestUpdateNotFound(t *testing.T) {
 		Kind:      "til",
 		Title:     "無い",
 	})
-	requireNotFound(t, err)
+	requireErrorName(t, err, "not_found")
 }
 
 func TestDelete(t *testing.T) {
@@ -316,7 +329,7 @@ func TestDelete(t *testing.T) {
 	if err == nil {
 		t.Fatal("削除したのに取得できている")
 	}
-	requireNotFound(t, err)
+	requireErrorName(t, err, "not_found")
 }
 
 func TestDeleteNotFound(t *testing.T) {
@@ -324,7 +337,7 @@ func TestDeleteNotFound(t *testing.T) {
 
 	// DELETE は対象が無くてもエラーにならないため、消えた行数で判定している。
 	err := svc.Delete(ctx, &entries.DeletePayload{ID: 999})
-	requireNotFound(t, err)
+	requireErrorName(t, err, "not_found")
 }
 
 func TestTimestampPrecision(t *testing.T) {
@@ -343,5 +356,92 @@ func TestTimestampPrecision(t *testing.T) {
 	}
 	if derefString(got.CreatedAt) != want {
 		t.Errorf("created_at = %q, want %q", derefString(got.CreatedAt), want)
+	}
+}
+
+func TestListPagination(t *testing.T) {
+	svc, ctx := newService(t)
+
+	// 12 件。entry_date を 1 日ずつずらして、並びを日付だけで決まるようにする。
+	ids := make([]int64, 0, 12)
+	for i := 1; i <= 12; i++ {
+		res := mustCreate(t, ctx, svc, fmt.Sprintf("2026-09-%02d", i), fmt.Sprintf("%d 件目", i))
+		ids = append(ids, *res.ID)
+	}
+
+	// 並びは entry_date の降順なので、最後に入れた 09-12 が先頭に来る。
+	newestFirst := make([]int64, len(ids))
+	for i, id := range ids {
+		newestFirst[len(ids)-1-i] = id
+	}
+
+	tests := []struct {
+		name   string
+		limit  int
+		offset int
+		want   []int64
+	}{
+		// 既定値の 10 は DSL の Default で入る。ここでは同じ値を明示して、
+		// 「10 件で切れる」ことだけを見る。
+		{name: "1 ページ目", limit: 10, offset: 0, want: newestFirst[:10]},
+		{name: "2 ページ目は残りだけ", limit: 10, offset: 10, want: newestFirst[10:]},
+		{name: "途中から少しだけ", limit: 3, offset: 2, want: newestFirst[2:5]},
+		{name: "範囲を越えたら空", limit: 10, offset: 100, want: nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := svc.List(ctx, &entries.ListPayload{Limit: tt.limit, Offset: tt.offset})
+			if err != nil {
+				t.Fatalf("list: %v", err)
+			}
+			if got == nil {
+				t.Fatal("list = nil, want 空スライス")
+			}
+			if len(got) != len(tt.want) {
+				t.Fatalf("len = %d, want %d", len(got), len(tt.want))
+			}
+			for i, id := range tt.want {
+				if got[i].ID == nil || *got[i].ID != id {
+					t.Errorf("list[%d].id = %s, want %d", i, derefInt64(got[i].ID), id)
+				}
+			}
+		})
+	}
+}
+
+func TestHealthCheck(t *testing.T) {
+	requireDB(t)
+
+	got, err := NewHealth(testPool).Check(context.Background())
+	if err != nil {
+		t.Fatalf("check: %v", err)
+	}
+	if got != "server OK!" {
+		t.Errorf("check = %q, want %q", got, "server OK!")
+	}
+}
+
+func TestHealthCheckDatabaseDown(t *testing.T) {
+	requireDB(t)
+
+	// 閉じたプールは Ping が必ず失敗する。DB そのものを落とさずに
+	// 「繋がらない状態」を作れるので、他のテストに影響しない。
+	ctx := context.Background()
+	pool, err := db.Connect(ctx, testDBURL)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	pool.Close()
+
+	_, err = NewHealth(pool).Check(ctx)
+	if err == nil {
+		t.Fatal("DB に繋がらないのに OK を返している")
+	}
+	serr := requireErrorName(t, err, "service_unavailable")
+
+	// 接続先やユーザ名が混ざっていないこと。ここはそのままクライアントに返る。
+	if serr.Message != "database unavailable" {
+		t.Errorf("message = %q, want %q（詳細はログにだけ残す）", serr.Message, "database unavailable")
 	}
 }

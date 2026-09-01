@@ -65,7 +65,7 @@ func main() {
 		entriesSvc entries.Service
 	)
 	{
-		healthSvc = life.NewHealth()
+		healthSvc = life.NewHealth(pool)
 		entriesSvc = life.NewEntries(pool)
 	}
 

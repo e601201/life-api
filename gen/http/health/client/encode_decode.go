@@ -35,6 +35,9 @@ func (c *Client) BuildCheckRequest(ctx context.Context, v any) (*http.Request, e
 // DecodeCheckResponse returns a decoder for responses returned by the health
 // check endpoint. restoreBody controls whether the response body should be
 // restored after having been read.
+// DecodeCheckResponse may return the following errors:
+//   - "service_unavailable" (type *goa.ServiceError): http.StatusServiceUnavailable
+//   - error: internal error
 func DecodeCheckResponse(decoder func(*http.Response) goahttp.Decoder, restoreBody bool) func(*http.Response) (any, error) {
 	return func(resp *http.Response) (any, error) {
 		if restoreBody {
@@ -60,6 +63,20 @@ func DecodeCheckResponse(decoder func(*http.Response) goahttp.Decoder, restoreBo
 				return nil, goahttp.ErrDecodingError("health", "check", err)
 			}
 			return body, nil
+		case http.StatusServiceUnavailable:
+			var (
+				body CheckServiceUnavailableResponseBody
+				err  error
+			)
+			err = decoder(resp).Decode(&body)
+			if err != nil {
+				return nil, goahttp.ErrDecodingError("health", "check", err)
+			}
+			err = ValidateCheckServiceUnavailableResponseBody(&body)
+			if err != nil {
+				return nil, goahttp.ErrValidationError("health", "check", err)
+			}
+			return nil, NewCheckServiceUnavailable(&body)
 		default:
 			body, _ := io.ReadAll(resp.Body)
 			return nil, goahttp.ErrInvalidResponse("health", "check", resp.StatusCode, string(body))

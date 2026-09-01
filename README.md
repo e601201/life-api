@@ -47,6 +47,8 @@ psql -h 127.0.0.1 -p 5432 -U life -d life   # パスワードは life
 
 api と migrate には接続先を `DATABASE_URL`（`postgres://life:life@db:5432/life?sslmode=disable`）
 で渡している。compose.yaml では YAML のアンカーで 1 箇所に書き、両サービスで共有している。
+この URL は素の文字列結合なので、`.env` でパスワードを変えるときに `@ : / ? #` を
+含めるなら percent-encode すること（`p@ss` なら `p%40ss`）。
 データは名前付きボリューム `pgdata` に残る（Postgres 18 で `PGDATA` の位置が変わったため、
 マウント先は `/var/lib/postgresql/data` ではなく `/var/lib/postgresql`）。
 
@@ -108,7 +110,11 @@ TEST_DATABASE_URL='postgres://life:life@localhost:5432/life_test?sslmode=disable
 ### 打鍵確認（curl）
 
 entries の CRUD は `entries` テーブルへの読み書き（`entries.go`）。プロセスを再起動しても
-データは残る。一覧は記録日の新しい順（同じ日なら id の降順）で返す。
+データは残る。一覧は記録日の新しい順（同じ日なら id の降順）で、**既定 10 件**を返す。
+件数と位置は `limit`（1〜100）と `offset` でずらす。
+
+`/health` はプロセスが生きているかに加えて DB への疎通も見る。繋がらないときは 503 を
+返すので、ALB のターゲットグループから外れる（W4 でそこに繋ぐ）。
 
 POST / PUT は `-H 'Content-Type: application/json'` が必須。
 `-d` だけだと curl は form-urlencoded で送るため、Goa が 415 を返す。
@@ -122,8 +128,9 @@ curl localhost:8080/health
 curl -H 'Content-Type: application/json' localhost:8080/entries \
   -d '{"title":"Goa入門","entry_date":"2026-08-31","kind":"til","body":"本文"}'
 
-# 一覧 / 単体取得
+# 一覧（既定 10 件）/ 単体取得
 curl localhost:8080/entries
+curl 'localhost:8080/entries?limit=3&offset=10'   # 11 件目から 3 件
 curl localhost:8080/entries/1
 
 # 更新（created_at と user_id は維持され、updated_at だけ進む。

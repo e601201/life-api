@@ -55,7 +55,8 @@ func NewCreateEndpoint(s Service) goa.Endpoint {
 // service "entries".
 func NewListEndpoint(s Service) goa.Endpoint {
 	return func(ctx context.Context, req any) (any, error) {
-		return s.List(ctx)
+		p := req.(*ListPayload)
+		return s.List(ctx, p)
 	}
 }
 

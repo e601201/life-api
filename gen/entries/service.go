@@ -17,8 +17,8 @@ import (
 type Service interface {
 	// Create a new journal entry
 	Create(context.Context, *EntryRequest) (res *CreateResult, err error)
-	// List all journal entries
-	List(context.Context) (res []*Journal, err error)
+	// List journal entries
+	List(context.Context, *ListPayload) (res []*Journal, err error)
 	// Get a journal entry by ID
 	Get(context.Context, *GetPayload) (res *Journal, err error)
 	// Update a journal entry by ID
@@ -90,6 +90,14 @@ type Journal struct {
 	Kind      string
 	Title     string
 	Body      *string
+}
+
+// ListPayload is the payload type of the entries service list method.
+type ListPayload struct {
+	// 取得する件数
+	Limit int
+	// 先頭から読み飛ばす件数
+	Offset int
 }
 
 // UpdatePayload is the payload type of the entries service update method.

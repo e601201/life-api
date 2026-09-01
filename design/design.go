@@ -15,11 +15,16 @@ var _ = Service("health", func() {
 	Description("health check this server")
 
 	Method("check", func() {
-		Description("Return OK if the server is alive.")
+		Description("Return OK if the server and its database are alive.")
 		Result(String, "OK")
+		// DB に繋がらないときは 503。ALB / ECS のヘルスチェックが叩く口なので、
+		// 実際には何も処理できないタスクを健全と判定させないため。
+		Error("service_unavailable")
 
 		HTTP(func() {
 			GET("/health")
+			Response(StatusOK)
+			Response("service_unavailable", StatusServiceUnavailable)
 		})
 	})
 })
@@ -90,11 +95,26 @@ var _ = Service("entries", func() {
 	})
 
 	Method("list", func() {
-		Description("List all journal entries")
+		Description("List journal entries")
+		// 無条件に全件返すと、件数が増えるほど1リクエストが重くなる。
+		// 既定は 10 件で、クエリパラメータでずらして読む。
+		Payload(func() {
+			Attribute("limit", Int, "取得する件数", func() {
+				Minimum(1)
+				Maximum(100)
+				Default(10)
+			})
+			Attribute("offset", Int, "先頭から読み飛ばす件数", func() {
+				Minimum(0)
+				Default(0)
+			})
+		})
 		Result(ArrayOf(Journal))
 
 		HTTP(func() {
 			GET("/entries")
+			Param("limit")
+			Param("offset")
 			Response(StatusOK)
 		})
 	})

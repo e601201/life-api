@@ -109,17 +109,21 @@ func (s *entriessrvc) Create(ctx context.Context, p *entries.EntryRequest) (*ent
 	}, nil
 }
 
-// List all journal entries
-func (s *entriessrvc) List(ctx context.Context) ([]*entries.Journal, error) {
-	log.Printf(ctx, "entries.list")
+// List journal entries
+func (s *entriessrvc) List(ctx context.Context, p *entries.ListPayload) ([]*entries.Journal, error) {
+	log.Printf(ctx, "entries.list limit=%d offset=%d", p.Limit, p.Offset)
 
 	// 記録日の新しい順。entries_entry_date_idx がこの並びなので、
 	// 件数が増えてもソートを挟まずに読める。
+	//
+	// limit / offset の既定値と取りうる範囲は DSL 側（Default / Minimum / Maximum）で
+	// 決めている。ここで補正すると同じ規則が 2 箇所に散るので、受け取った値をそのまま渡す。
 	const q = `SELECT ` + journalColumns + `
 	           FROM entries
-	           ORDER BY entry_date DESC, id DESC`
+	           ORDER BY entry_date DESC, id DESC
+	           LIMIT $1 OFFSET $2`
 
-	rows, err := s.db.Query(ctx, q)
+	rows, err := s.db.Query(ctx, q, p.Limit, p.Offset)
 	if err != nil {
 		return nil, fmt.Errorf("list entries: %w", err)
 	}

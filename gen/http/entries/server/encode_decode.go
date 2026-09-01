@@ -74,6 +74,57 @@ func EncodeListResponse(encoder func(context.Context, http.ResponseWriter) goaht
 	}
 }
 
+// DecodeListRequest returns a decoder for requests sent to the entries list
+// endpoint.
+func DecodeListRequest(mux goahttp.Muxer, decoder func(*http.Request) goahttp.Decoder) func(*http.Request) (*entries.ListPayload, error) {
+	return func(r *http.Request) (*entries.ListPayload, error) {
+		var payload *entries.ListPayload
+		var (
+			limit  int
+			offset int
+			err    error
+		)
+		qp := r.URL.Query()
+		{
+			limitRaw := qp.Get("limit")
+			if limitRaw == "" {
+				limit = 10
+			} else {
+				v, err2 := strconv.ParseInt(limitRaw, 10, strconv.IntSize)
+				if err2 != nil {
+					err = goa.MergeErrors(err, goa.InvalidFieldTypeError("limit", limitRaw, "integer"))
+				}
+				limit = int(v)
+			}
+		}
+		if limit < 1 {
+			err = goa.MergeErrors(err, goa.InvalidRangeError("limit", limit, 1, true))
+		}
+		if limit > 100 {
+			err = goa.MergeErrors(err, goa.InvalidRangeError("limit", limit, 100, false))
+		}
+		{
+			offsetRaw := qp.Get("offset")
+			if offsetRaw != "" {
+				v, err2 := strconv.ParseInt(offsetRaw, 10, strconv.IntSize)
+				if err2 != nil {
+					err = goa.MergeErrors(err, goa.InvalidFieldTypeError("offset", offsetRaw, "integer"))
+				}
+				offset = int(v)
+			}
+		}
+		if offset < 0 {
+			err = goa.MergeErrors(err, goa.InvalidRangeError("offset", offset, 0, true))
+		}
+		if err != nil {
+			return payload, err
+		}
+		payload = NewListPayload(limit, offset)
+
+		return payload, nil
+	}
+}
+
 // EncodeGetResponse returns an encoder for responses returned by the entries
 // get endpoint.
 func EncodeGetResponse(encoder func(context.Context, http.ResponseWriter) goahttp.Encoder) func(context.Context, http.ResponseWriter, any) error {

@@ -9,11 +9,13 @@ package health
 
 import (
 	"context"
+
+	goa "goa.design/goa/v3/pkg"
 )
 
 // health check this server
 type Service interface {
-	// Return OK if the server is alive.
+	// Return OK if the server and its database are alive.
 	Check(context.Context) (res string, err error)
 }
 
@@ -32,3 +34,8 @@ const ServiceName = "health"
 // are the same values that are set in the endpoint request contexts under the
 // MethodKey key.
 var MethodNames = [1]string{"check"}
+
+// MakeServiceUnavailable builds a goa.ServiceError from an error.
+func MakeServiceUnavailable(err error) *goa.ServiceError {
+	return goa.NewServiceError(err, "service_unavailable", false, false, false)
+}

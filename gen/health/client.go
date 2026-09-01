@@ -26,6 +26,9 @@ func NewClient(check goa.Endpoint) *Client {
 }
 
 // Check calls the "check" endpoint of the "health" service.
+// Check may return the following errors:
+//   - "service_unavailable" (type *goa.ServiceError)
+//   - error: internal error
 func (c *Client) Check(ctx context.Context) (res string, err error) {
 	var ires any
 	ires, err = c.CheckEndpoint(ctx, nil)
