@@ -66,8 +66,7 @@ func main() {
 	)
 	{
 		healthSvc = life.NewHealth()
-		// entries はまだインメモリ実装。CRUD を DB に移すときに pool を渡す。
-		entriesSvc = life.NewEntries()
+		entriesSvc = life.NewEntries(pool)
 	}
 
 	// Wrap the services in endpoints that can be invoked from other services

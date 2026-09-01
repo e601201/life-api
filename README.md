@@ -87,8 +87,8 @@ db/migrations/000002_create_tags.down.sql
 
 ### 打鍵確認（curl）
 
-entries の CRUD は**まだインメモリ実装**。`entries` テーブルは作ってあるが読み書きには
-使っておらず、プロセスを再起動するとデータは消える（DB へ移すのは次の作業）。
+entries の CRUD は `entries` テーブルへの読み書き（`entries.go`）。プロセスを再起動しても
+データは残る。一覧は記録日の新しい順（同じ日なら id の降順）で返す。
 
 POST / PUT は `-H 'Content-Type: application/json'` が必須。
 `-d` だけだと curl は form-urlencoded で送るため、Goa が 415 を返す。
@@ -106,7 +106,8 @@ curl -H 'Content-Type: application/json' localhost:8080/entries \
 curl localhost:8080/entries
 curl localhost:8080/entries/1
 
-# 更新（created_at は維持され、updated_at だけ進む）
+# 更新（created_at と user_id は維持され、updated_at だけ進む。
+#  body を省くと NULL に戻る＝PUT なので送った内容で全体を置き換える）
 curl -X PUT -H 'Content-Type: application/json' localhost:8080/entries/1 \
   -d '{"title":"Goa入門(更新)","entry_date":"2026-08-31","kind":"til","body":"追記"}'
 
