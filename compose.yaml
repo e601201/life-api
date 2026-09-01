@@ -1,30 +1,49 @@
 # ローカル開発用に api と PostgreSQL をまとめて立ち上げる。
 #
-#   docker compose up -d --build     # 起動（db が ready になってから api が上がる）
+#   docker compose up -d --build     # 起動（db -> migrate -> api の順に立ち上がる）
 #   curl localhost:8080/health       # => "server OK!"
 #   docker compose down              # 停止（-v を付けるとデータも消える）
 #
 # 本番（ECS Fargate + RDS）ではこのファイルは使わない。db サービスは
 # ローカルでの RDS の代わりで、接続情報は .env で上書きできる（.env.example 参照）。
 
+# api と migrate で同じ接続先を使う。片方だけ直して食い違うのを避けるため、
+# YAML のアンカーで 1 箇所にまとめている。
+x-database-url: &database-url
+  DATABASE_URL: postgres://${POSTGRES_USER:-life}:${POSTGRES_PASSWORD:-life}@db:5432/${POSTGRES_DB:-life}?sslmode=disable
+
 services:
   api:
     build: .
+    # migrate と同じイメージを使い回すため、名前を固定しておく。
+    image: life-api:local
     # Dockerfile の CMD と同じ値。イメージ側の既定に依存せず、
     # 0.0.0.0 で listen していることをこのファイル単体で読めるようにしておく。
     command: ["--host", "container"]
     ports:
       - "8080:8080"
-    environment:
-      # コンテナ間はサービス名で名前解決されるので、ホストは db でよい。
-      # ローカルなので sslmode=disable。RDS では require 以上にする。
-      DATABASE_URL: postgres://${POSTGRES_USER:-life}:${POSTGRES_PASSWORD:-life}@db:5432/${POSTGRES_DB:-life}?sslmode=disable
+    environment: *database-url
+    depends_on:
+      migrate:
+        # マイグレーションが正常終了してから api を起動する。api 自身は
+        # スキーマを適用しないので、この順序が崩れるとテーブルの無い DB に繋ぐことになる。
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  # スキーマ適用専用。起動しっぱなしにはせず、up を流して終了する一回きりのサービス。
+  # ECS でも同じイメージの entryPoint だけ差し替えて、単発タスクとして流す想定。
+  migrate:
+    build: .
+    image: life-api:local
+    entrypoint: ["/life-migrate"]
+    command: ["up"]
+    environment: *database-url
     depends_on:
       db:
-        # 「コンテナが起動した」ではなく「接続を受け付けられる」まで待つ。
-        # 既定の service_started だと、Postgres の初期化中に api が繋ぎにいく。
         condition: service_healthy
-    restart: unless-stopped
+    # 終了コード 0 で終わるのが正常。再起動されると
+    # service_completed_successfully がいつまでも満たされない。
+    restart: "no"
 
   db:
     # 18 から PGDATA が /var/lib/postgresql/18/docker に移ったため、

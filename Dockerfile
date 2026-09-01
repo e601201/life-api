@@ -19,10 +19,13 @@ COPY . .
 # GOARCH=amd64: ECS Fargate の X86_64 に合わせる。
 # -trimpath: バイナリからビルドマシンの絶対パスを消す。
 # -ldflags="-s -w": シンボルと DWARF を落としてサイズを削る。
+# -o に「/out/」とディレクトリを渡すと、複数パッケージをまとめてビルドして
+# それぞれのバイナリを吐ける。api（life）とマイグレーション（life-migrate）は
+# 同じイメージに入れ、compose / ECS 側でどちらを起動するか選ぶ。
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-    go build -trimpath -ldflags="-s -w" -o /out/life ./cmd/life
+    go build -trimpath -ldflags="-s -w" -o /out/ ./cmd/life ./cmd/life-migrate
 
 # ---- 実行ステージ ------------------------------------------------------------
 # static-debian12: シェルもパッケージマネージャも入っていない。CA 証明書と
@@ -34,6 +37,7 @@ FROM gcr.io/distroless/static-debian12:nonroot
 USER nonroot:nonroot
 
 COPY --from=build /out/life /life
+COPY --from=build /out/life-migrate /life-migrate
 
 # ドキュメント用（実際の公開は docker run -p / ECS のポートマッピング側で決まる）
 EXPOSE 8080
@@ -43,5 +47,8 @@ EXPOSE 8080
 #   docker run life-api --host container --debug
 # のように、CMD だけ差し替えて引数を足せる。ECS のタスク定義でも
 # entryPoint はそのまま、command だけ上書きすればよい。
+#
+# マイグレーションを流すときは entryPoint ごと差し替える:
+#   docker run --entrypoint /life-migrate life-api up
 ENTRYPOINT ["/life"]
 CMD ["--host", "container"]

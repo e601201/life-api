@@ -12,6 +12,7 @@ import (
 	"syscall"
 
 	life "github.com/e601201/life-api"
+	"github.com/e601201/life-api/db"
 	entries "github.com/e601201/life-api/gen/entries"
 	health "github.com/e601201/life-api/gen/health"
 	"goa.design/clue/debug"
@@ -27,6 +28,7 @@ func main() {
 		httpPortF = flag.String("http-port", "", "HTTP port (overrides host HTTP port specified in service design)")
 		secureF   = flag.Bool("secure", false, "Use secure scheme (https or grpcs)")
 		dbgF      = flag.Bool("debug", false, "Log request and response bodies")
+		dbURLF    = flag.String("db-url", os.Getenv("DATABASE_URL"), "PostgreSQL connection URL (default $DATABASE_URL)")
 	)
 	flag.Parse()
 
@@ -42,6 +44,21 @@ func main() {
 	}
 	log.Print(ctx, log.KV{K: "http-port", V: *httpPortF})
 
+	// Connect to the database.
+	//
+	// スキーマの適用はこのプロセスではやらない（cmd/life-migrate に分けてある）。
+	// ここで繋ぐのは、接続情報が間違っていれば最初のリクエストではなく起動時点で
+	// 落としたいため。
+	if *dbURLF == "" {
+		log.Fatal(ctx, fmt.Errorf("database URL is empty: set -db-url or $DATABASE_URL"))
+	}
+	pool, err := db.Connect(ctx, *dbURLF)
+	if err != nil {
+		log.Fatalf(ctx, err, "failed to connect to database")
+	}
+	defer pool.Close()
+	log.Print(ctx, log.KV{K: "msg", V: "database connected"})
+
 	// Initialize the services.
 	var (
 		healthSvc  health.Service
@@ -49,6 +66,7 @@ func main() {
 	)
 	{
 		healthSvc = life.NewHealth()
+		// entries はまだインメモリ実装。CRUD を DB に移すときに pool を渡す。
 		entriesSvc = life.NewEntries()
 	}
 

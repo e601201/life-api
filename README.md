@@ -9,9 +9,16 @@ Goa の design-first で DSL から OpenAPI を生成し、Go + ECS Fargate + RD
 ```
 mise install                                    # Go のバージョンを揃える
 goa gen github.com/e601201/life-api/design      # design.go から gen/ を生成
+docker compose up -d db                         # DB だけ先に立ち上げる
+export DATABASE_URL='postgres://life:life@localhost:5432/life?sslmode=disable'
+go run ./cmd/life-migrate up                    # スキーマを適用する
 go run ./cmd/life --host localhost              # http://localhost:8080 で起動
 curl localhost:8080/health                      # => "server OK!"
 ```
+
+api は起動時に DB へ繋ぎ、失敗したらそこで落ちる（最初のリクエストまで気づけないのを避けるため）。
+接続先は `-db-url`、既定は環境変数 `DATABASE_URL`。全部コンテナで動かすなら後述の
+`docker compose up` だけでよく、この手順は要らない。
 
 `--host container` を渡すと `0.0.0.0:8080` で listen する。コンテナや ECS ではこちらを使う
 （`localhost` だと 127.0.0.1 に bind されるため、コンテナの外から繋がらない）。
@@ -20,12 +27,12 @@ bind するアドレスは `design/design.go` の `Server` / `Host` で定義し
 
 ### docker compose（api + PostgreSQL）
 
-api と PostgreSQL をまとめて立ち上げる。`depends_on` の `service_healthy` で、
-db が接続を受け付けられるようになってから api が起動する。
+api と PostgreSQL をまとめて立ち上げる。`db`（healthy になるまで待つ）→ `migrate`
+（正常終了するまで待つ）→ `api` の順で起動する。
 
 ```sh
 cp .env.example .env              # 任意。DB のユーザ名やポートを変えたいときだけ
-docker compose up -d --build      # 起動
+docker compose up -d --build      # 起動（マイグレーションも流れる）
 curl localhost:8080/health        # => "server OK!"
 docker compose logs -f api        # ログ
 docker compose down               # 停止（-v を付けると DB のデータも消える）
@@ -38,10 +45,37 @@ DB はホストの 5432 に出している。ローカルで別の Postgres が�
 psql -h 127.0.0.1 -p 5432 -U life -d life   # パスワードは life
 ```
 
-api には接続先を `DATABASE_URL`（`postgres://life:life@db:5432/life?sslmode=disable`）で
-渡している。サービス実装はまだインメモリなので、この値は今のところ使っていない。
+api と migrate には接続先を `DATABASE_URL`（`postgres://life:life@db:5432/life?sslmode=disable`）
+で渡している。compose.yaml では YAML のアンカーで 1 箇所に書き、両サービスで共有している。
 データは名前付きボリューム `pgdata` に残る（Postgres 18 で `PGDATA` の位置が変わったため、
 マウント先は `/var/lib/postgresql/data` ではなく `/var/lib/postgresql`）。
+
+### マイグレーション
+
+[golang-migrate](https://github.com/golang-migrate/migrate) を使い、SQL は
+`db/migrations/` に置いて `//go:embed` でバイナリに埋め込んでいる。実行時に .sql を
+配る必要がないので、distroless のイメージにもバイナリ 1 つ置けば済む。
+
+```sh
+go run ./cmd/life-migrate up        # 未適用のものを全て適用する（何度流してもよい）
+go run ./cmd/life-migrate down      # 直前の 1 つを巻き戻す（-n で数を指定）
+go run ./cmd/life-migrate version   # 適用済みのバージョンを表示する
+```
+
+適用は api とは別のコマンド（`cmd/life-migrate`）に分けてある。api の起動時に自動適用すると、
+ECS でタスクが同時に複数立ち上がったときに同じマイグレーションを取り合うため。
+ECS では同じイメージの `entryPoint` を `/life-migrate` に差し替えた単発タスクを流し、
+成功してからサービスを新しいリビジョンに更新する。
+
+新しいマイグレーションを足すときは、連番のペアを作る。
+
+```
+db/migrations/000002_create_tags.up.sql
+db/migrations/000002_create_tags.down.sql
+```
+
+適用の途中で失敗すると `schema_migrations.dirty` が立ち、以降の up / down が全て弾かれる。
+その場合は DB の状態を手で直してから、版を宣言し直すことになる。
 
 ### コード生成の注意
 
@@ -52,6 +86,9 @@ api には接続先を `DATABASE_URL`（`postgres://life:life@db:5432/life?sslmo
 - `gen/` はコミットする。Docker のビルドステージで goa CLI を入れずに済むため
 
 ### 打鍵確認（curl）
+
+entries の CRUD は**まだインメモリ実装**。`entries` テーブルは作ってあるが読み書きには
+使っておらず、プロセスを再起動するとデータは消える（DB へ移すのは次の作業）。
 
 POST / PUT は `-H 'Content-Type: application/json'` が必須。
 `-d` だけだと curl は form-urlencoded で送るため、Goa が 415 を返す。

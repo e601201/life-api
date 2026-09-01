@@ -3,6 +3,8 @@ module github.com/e601201/life-api
 go 1.27.0
 
 require (
+	github.com/golang-migrate/migrate/v4 v4.19.1
+	github.com/jackc/pgx/v5 v5.10.0
 	goa.design/clue v1.2.6
 	goa.design/goa/v3 v3.30.0
 )
@@ -16,6 +18,10 @@ require (
 	github.com/gohugoio/hashstructure v1.0.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
+	github.com/jackc/pgerrcode v0.0.0-20220416144525-469b46aa5efa // indirect
+	github.com/jackc/pgpassfile v1.0.0 // indirect
+	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
+	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/manveru/faker v0.0.0-20171103152722-9fbc68a78c4d // indirect
 	github.com/stretchr/testify v1.12.1 // indirect
 	go.opentelemetry.io/otel v1.44.0 // indirect
