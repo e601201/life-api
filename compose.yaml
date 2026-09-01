@@ -62,8 +62,14 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql
     healthcheck:
+      # -h 127.0.0.1 を付けて TCP で確かめる。既定の Unix ソケット越しだと、
+      # 初回起動（pgdata が空）のときに誤って healthy になる。postgres の
+      # entrypoint は initdb のあと listen_addresses='' の一時サーバを立てるので、
+      # その最中はソケットには応答するが TCP は繋がらない。ここで healthy にすると
+      # migrate が接続を拒否されて exit 1 し、api の待ち条件が永久に満たされない。
+      #
       # $$ は compose の変数展開を抑止するエスケープ（コンテナ内のシェルに $ で渡る）。
-      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
       timeout: 5s
       retries: 10

@@ -6,7 +6,8 @@
 // 同じマイグレーションを取り合うことになる。
 //
 //	life-migrate up          # 未適用のものを全て適用する
-//	life-migrate down        # 直前の 1 つを巻き戻す（-n で数を指定）
+//	life-migrate down        # 直前の 1 つを巻き戻す
+//	life-migrate down -n 3   # 3 つ巻き戻す
 //	life-migrate version     # 適用済みのバージョンを表示する
 //
 // 接続先は -db-url、既定は環境変数 DATABASE_URL。
@@ -28,11 +29,32 @@ func main() {
 	flag.Usage = usage
 	flag.Parse()
 
+	cmd := flag.Arg(0)
+	if cmd == "" {
+		usage()
+		os.Exit(2)
+	}
+
+	// flag.Parse は最初の非フラグ引数で解析を止めるため、この時点では
+	// `life-migrate down -n 3` の -n がまだ読まれていない。サブコマンドの
+	// 後ろに残った分をもう一度解析して拾う（ExitOnError なので、書式が
+	// 不正ならここで usage を出して終わる）。
+	rest := flag.Args()[1:]
+	_ = flag.CommandLine.Parse(rest)
+
+	// それでも余る引数は打ち間違い。黙って既定値で実行すると、-n が効いて
+	// いないことに気づけないままロールバックが 1 つだけ走る。
+	if extra := flag.Args(); len(extra) > 0 {
+		fmt.Fprintf(os.Stderr, "unknown argument: %q\n\n", extra[0])
+		usage()
+		os.Exit(2)
+	}
+
 	if *dbURLF == "" {
 		fatalf("接続先が空です。-db-url か環境変数 DATABASE_URL を指定してください")
 	}
 
-	switch cmd := flag.Arg(0); cmd {
+	switch cmd {
 	case "up":
 		if err := db.Up(*dbURLF); err != nil {
 			fatalf("%v", err)
@@ -47,10 +69,6 @@ func main() {
 
 	case "version":
 		printVersion(*dbURLF, "current")
-
-	case "":
-		usage()
-		os.Exit(2)
 
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %q\n\n", cmd)
@@ -82,7 +100,7 @@ func usage() {
 	fmt.Fprint(os.Stderr, `usage: life-migrate [flags] <up|down|version>
 
   up        未適用のマイグレーションを全て適用する
-  down      直前のマイグレーションを巻き戻す（-n で数を指定）
+  down      直前のマイグレーションを巻き戻す（-n で数を指定。例: down -n 3）
   version   適用済みのバージョンを表示する
 
 flags:

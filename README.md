@@ -58,7 +58,8 @@ api と migrate には接続先を `DATABASE_URL`（`postgres://life:life@db:543
 
 ```sh
 go run ./cmd/life-migrate up        # 未適用のものを全て適用する（何度流してもよい）
-go run ./cmd/life-migrate down      # 直前の 1 つを巻き戻す（-n で数を指定）
+go run ./cmd/life-migrate down      # 直前の 1 つを巻き戻す
+go run ./cmd/life-migrate down -n 3 # 3 つ巻き戻す
 go run ./cmd/life-migrate version   # 適用済みのバージョンを表示する
 ```
 

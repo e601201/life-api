@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/url"
 	"sync"
@@ -14,7 +15,12 @@ import (
 	"goa.design/clue/debug"
 	"goa.design/clue/log"
 	goahttp "goa.design/goa/v3/http"
+	goa "goa.design/goa/v3/pkg"
 )
+
+// maxRequestBody はリクエストボディの読み取り上限。日誌の本文を通すには十分な
+// 大きさで、かつ 1 リクエストがメモリを食い潰さない値にしている。
+const maxRequestBody = 1 << 20 // 1MiB
 
 // handleHTTPServer starts configures and starts a HTTP server on the given
 // URL. It shuts down the server if any error is received in the error channel.
@@ -52,8 +58,9 @@ func handleHTTPServer(ctx context.Context, u *url.URL, healthEndpoints *health.E
 	)
 	{
 		eh := errorHandler(ctx)
-		healthServer = healthsvr.New(healthEndpoints, mux, dec, enc, eh, nil)
-		entriesServer = entriessvr.New(entriesEndpoints, mux, dec, enc, eh, nil)
+		ef := errorFormatter(ctx)
+		healthServer = healthsvr.New(healthEndpoints, mux, dec, enc, eh, ef)
+		entriesServer = entriessvr.New(entriesEndpoints, mux, dec, enc, eh, ef)
 	}
 
 	// Configure the mux.
@@ -66,10 +73,21 @@ func handleHTTPServer(ctx context.Context, u *url.URL, healthEndpoints *health.E
 		handler = debug.HTTP()(handler)
 	}
 	handler = log.HTTP(ctx)(handler)
+	// ボディの読み取り上限。最外周に置いて全エンドポイントに効かせる。
+	// 上限を超えたリクエストはデコードの時点で失敗し、400 で返る。
+	handler = http.MaxBytesHandler(handler, maxRequestBody)
 
-	// Start HTTP server using default configuration, change the code to
-	// configure the server as required by your service.
-	srv := &http.Server{Addr: u.Host, Handler: handler, ReadHeaderTimeout: time.Second * 60}
+	// http.Server のタイムアウトは既定でどれも無制限。放っておくと、遅い
+	// （あるいは意図的に遅くした）クライアント 1 本が接続を掴んだままになる。
+	// 認証なしで外に出す構成なので、読み・書き・アイドルのそれぞれに上限を置く。
+	srv := &http.Server{
+		Addr:              u.Host,
+		Handler:           handler,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
 	for _, m := range healthServer.Mounts {
 		log.Printf(ctx, "HTTP %q mounted on %s %s", m.Method, m.Verb, m.Pattern)
 	}
@@ -99,6 +117,29 @@ func handleHTTPServer(ctx context.Context, u *url.URL, healthEndpoints *health.E
 			log.Printf(shutdownCtx, "failed to shutdown: %v", err)
 		}
 	}()
+}
+
+// errorFormatter は goa がクライアントに返すエラー表現を組み立てる。
+//
+// design に宣言していないエラー（DB のエラーなど）は、goa の既定では
+// err.Error() がそのままレスポンスの message に載る（goahttp.NewErrorResponse が
+// goa.Fault で包むため）。PostgreSQL のメッセージには接続先ホストや DB ユーザ名が
+// 入るので、外には汎用の文言だけを返し、中身はログに残す。
+//
+// レスポンスとログの両方に同じ ID を出しているので、問い合わせを受けたら
+// その ID でログを引ける。
+func errorFormatter(logCtx context.Context) func(context.Context, error) goahttp.Statuser {
+	return func(ctx context.Context, err error) goahttp.Statuser {
+		var serr *goa.ServiceError
+		if errors.As(err, &serr) {
+			// design で宣言したエラー（not_found）とバリデーション違反は
+			// クライアントに見せる前提の情報なので、そのまま返す。
+			return goahttp.NewErrorResponse(ctx, err)
+		}
+		fault := goa.Fault("internal error")
+		log.Printf(logCtx, "ERROR id=%s: %s", fault.ID, err.Error())
+		return goahttp.NewErrorResponse(ctx, fault)
+	}
 }
 
 // errorHandler returns a function that writes and logs the given error.
