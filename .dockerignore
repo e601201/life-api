@@ -13,6 +13,7 @@
 # Docker 自身（COPY . . で入れる必要がない）
 Dockerfile
 .dockerignore
+compose.yaml
 
 # ドキュメント・ローカル開発用ツール
 README.md

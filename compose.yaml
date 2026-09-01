@@ -1,0 +1,56 @@
+# ローカル開発用に api と PostgreSQL をまとめて立ち上げる。
+#
+#   docker compose up -d --build     # 起動（db が ready になってから api が上がる）
+#   curl localhost:8080/health       # => "server OK!"
+#   docker compose down              # 停止（-v を付けるとデータも消える）
+#
+# 本番（ECS Fargate + RDS）ではこのファイルは使わない。db サービスは
+# ローカルでの RDS の代わりで、接続情報は .env で上書きできる（.env.example 参照）。
+
+services:
+  api:
+    build: .
+    # Dockerfile の CMD と同じ値。イメージ側の既定に依存せず、
+    # 0.0.0.0 で listen していることをこのファイル単体で読めるようにしておく。
+    command: ["--host", "container"]
+    ports:
+      - "8080:8080"
+    environment:
+      # コンテナ間はサービス名で名前解決されるので、ホストは db でよい。
+      # ローカルなので sslmode=disable。RDS では require 以上にする。
+      DATABASE_URL: postgres://${POSTGRES_USER:-life}:${POSTGRES_PASSWORD:-life}@db:5432/${POSTGRES_DB:-life}?sslmode=disable
+    depends_on:
+      db:
+        # 「コンテナが起動した」ではなく「接続を受け付けられる」まで待つ。
+        # 既定の service_started だと、Postgres の初期化中に api が繋ぎにいく。
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    # 18 から PGDATA が /var/lib/postgresql/18/docker に移ったため、
+    # ボリュームは data ではなく /var/lib/postgresql ごとマウントする。
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-life}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-life}
+      POSTGRES_DB: ${POSTGRES_DB:-life}
+    ports:
+      # psql や GUI クライアントから覗けるように公開する。127.0.0.1 に絞って
+      # 同じ LAN の他マシンから開発 DB が見えないようにしておく。
+      # ホスト側で別の Postgres が 5432 を使っていて bind に失敗する場合は、
+      # POSTGRES_PORT でずらす（コンテナ間は db:5432 のままなので api には影響しない）。
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      # $$ は compose の変数展開を抑止するエスケープ（コンテナ内のシェルに $ で渡る）。
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      # 初期化中の失敗で retries を使い切らないための猶予。
+      start_period: 10s
+    restart: unless-stopped
+
+volumes:
+  pgdata:

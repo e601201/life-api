@@ -18,6 +18,31 @@ curl localhost:8080/health                      # => "server OK!"
 bind するアドレスは `design/design.go` の `Server` / `Host` で定義しているので、
 変えるときは `cmd/` ではなく DSL を直して `goa gen` し直す。
 
+### docker compose（api + PostgreSQL）
+
+api と PostgreSQL をまとめて立ち上げる。`depends_on` の `service_healthy` で、
+db が接続を受け付けられるようになってから api が起動する。
+
+```sh
+cp .env.example .env              # 任意。DB のユーザ名やポートを変えたいときだけ
+docker compose up -d --build      # 起動
+curl localhost:8080/health        # => "server OK!"
+docker compose logs -f api        # ログ
+docker compose down               # 停止（-v を付けると DB のデータも消える）
+```
+
+DB はホストの 5432 に出している。ローカルで別の Postgres が動いていると bind に失敗するので、
+そのときは `POSTGRES_PORT` でずらす（コンテナ間は `db:5432` のままなので api には影響しない）。
+
+```sh
+psql -h 127.0.0.1 -p 5432 -U life -d life   # パスワードは life
+```
+
+api には接続先を `DATABASE_URL`（`postgres://life:life@db:5432/life?sslmode=disable`）で
+渡している。サービス実装はまだインメモリなので、この値は今のところ使っていない。
+データは名前付きボリューム `pgdata` に残る（Postgres 18 で `PGDATA` の位置が変わったため、
+マウント先は `/var/lib/postgresql/data` ではなく `/var/lib/postgresql`）。
+
 ### コード生成の注意
 
 - **`goa gen` は何度実行してもよい。** `gen/` を作り直すだけで、手を入れたコードは壊さない
