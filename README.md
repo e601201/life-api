@@ -152,6 +152,105 @@ curl -H 'Content-Type: application/json' localhost:8080/entries \
   -d '{"title":"","entry_date":"banana","kind":"til"}'
 ```
 
+## インフラ（Terraform）
+
+AWS 側の構成は `terraform/` にある。W1〜W2 でコンソールと CLI で手作業したものを、
+そのまま Terraform に書き起こした（life#40）。ALB と独自 VPC はまだ無い（W4）。
+デフォルト VPC のパブリックサブネットに全部置き、api のタスクにはパブリック IP を付けて、
+`terraform.tfvars` に書いた CIDR（自宅 IP）からだけ 8080 を叩ける。
+
+```
+[自宅 IP] --8080--> ECS Fargate (life-api) --5432--> RDS PostgreSQL (life-db)
+                        ↑ pull                ↑ DATABASE_URL
+                       ECR              SSM Parameter Store
+```
+
+| ファイル | 中身 |
+| --- | --- |
+| `ecr.tf` | リポジトリ `life-api` と、新しい 10 世代だけ残すライフサイクル |
+| `ecs.tf` | クラスタ `life`、タスク定義 `life-api` / `life-migrate`、サービス `life-api` |
+| `rds.tf` / `ssm.tf` | RDS `life-db`（db.t4g.micro）と、接続文字列を入れる SSM パラメータ `/life-api/database-url` |
+| `sg.tf` | SG `life-api-ecs`（8080 は許可 CIDR から）と `life-api-rds`（5432 は api の SG からだけ） |
+| `iam.tf` | タスク実行ロール `ecsTaskExecutionRole`（ECR pull / ログ / SSM 読み取り） |
+| `logs.tf` | ロググループ `/ecs/life-api`（30 日で消す） |
+
+### 使い方
+
+```sh
+export AWS_PROFILE=life
+cd terraform
+cp terraform.tfvars.example terraform.tfvars   # 自宅 IP を書く（curl https://checkip.amazonaws.com）
+terraform init
+terraform plan
+terraform apply                                 # RDS 込みで 5〜10 分かかる
+```
+
+state は手元の `terraform.tfstate`（gitignore 済み）。DB のパスワードが平文で入るので、
+リポジトリにもイメージにも入れない（`.dockerignore` で `terraform/` ごと外している）。
+
+### スキーマ適用と起動・停止
+
+DB は空で作られるので、最初に `life-migrate up` を Fargate の単発タスクとして流す。
+VPC 内から RDS に繋ぐので、09/05 のように自宅 IP を RDS の SG に開ける必要はない。
+
+```sh
+terraform output -raw migrate_command | sh      # 単発タスクを起動（終了コード 0 で成功）
+aws logs tail /ecs/life-api --log-stream-name-prefix migrate --since 10m   # ログで確認
+
+terraform apply -var api_desired_count=1        # api を 1 タスク起動
+terraform apply                                 # 確認が済んだら 0 に戻す（既定値が 0）
+terraform apply -var db_enabled=false           # RDS と接続文字列を消す（ECR / ECS / SG / IAM は残る）
+```
+
+**desired count は Terraform の変数で持つ**。CLI で 1 にしても、次の `terraform apply` で 0 に戻る。
+「使い終わったら止める」を既定にするための挙動なので、そのまま使う。
+
+タスクのパブリック IP は起動のたびに変わる。
+
+```sh
+task=$(aws ecs list-tasks --cluster life --service-name life-api --query 'taskArns[0]' --output text)
+eni=$(aws ecs describe-tasks --cluster life --tasks "$task" \
+  --query 'tasks[0].attachments[0].details[?name==`networkInterfaceId`].value' --output text)
+aws ec2 describe-network-interfaces --network-interface-ids "$eni" \
+  --query 'NetworkInterfaces[0].Association.PublicIp' --output text
+```
+
+### イメージの更新
+
+`--platform linux/amd64` と `--provenance=false` の 2 つは省かない（08/29・09/05 の TIL）。
+前者が無いと arm64 Mac のイメージになって Fargate で動かず、後者が無いとイメージが
+OCI index になってタグなしの実体が並ぶ。
+
+```sh
+repo=$(terraform -chdir=terraform output -raw ecr_repository_url)
+aws ecr get-login-password | docker login --username AWS --password-stdin "${repo%/*}"
+docker build --platform linux/amd64 --provenance=false -t "$repo:latest" .
+docker push "$repo:latest"
+aws ecs update-service --cluster life --service life-api --force-new-deployment
+```
+
+### 手作業からの移行で決めたこと
+
+- **import したもの**: ECR リポジトリ、ECS クラスタ、タスク実行ロール（管理ポリシーとインラインポリシー込み）、ロググループ。
+  import ブロック（`import.tf`）で宣言して最初の apply で state に入れた。取り込みが済めば不要なので
+  ファイルは消してある（残すと、環境を作り直したときに「無いものを import しようとして」落ちる）
+- **作り直したもの**: サービスと SG。コンソールのウィザードが CloudFormation スタック
+  `ECS-Console-V2-Service-life-api-service-0eeazhof-life-77a3fdf3` として作っていたため、
+  import すると二重管理になる。Terraform では `life-api` / `life-api-ecs` と別名で作り、
+  旧スタックは apply が通ったあとに `aws cloudformation delete-stack` で消した（サービスは desired 0 だったので何も止まらなかった）
+- **新規に作るもの**: RDS、SSM パラメータ、DB 用 SG。09/05 に削除済みなので import するものが無い
+- **タスク定義は import しない**。リビジョンは不変なので、Terraform が新しいリビジョンを登録する。
+  `life-api:1`〜`3` はそのまま残る（消したければ `deregister-task-definition`）
+- **AWS Budgets（月 $20）は含めない**。アプリの構成ではなくアカウントの設定なので、このリポジトリの外
+
+### 費用
+
+| リソース | 目安 | 止め方 |
+| --- | --- | --- |
+| RDS db.t4g.micro + 20GB gp3 | ~$0.02/時（~$15/月） | `-var db_enabled=false` で消す |
+| Fargate 0.25 vCPU / 0.5 GB | ~$0.02/時 | desired 0（既定） |
+| ECR / ログ / SSM Standard | ほぼ 0 | - |
+
 ## 関連
 
 - 目標・進め方・週次の計画は [life](https://github.com/e601201/life) リポジトリの `state/` に置いている

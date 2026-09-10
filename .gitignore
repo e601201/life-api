@@ -15,3 +15,12 @@
 # エディタ
 .idea/
 .vscode/
+
+# Terraform（state には DB のパスワードが入る。tfvars には自宅 IP が入る）
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+terraform.tfvars
+*.auto.tfvars
+crash.log

@@ -19,6 +19,9 @@ compose.yaml
 README.md
 mise.toml
 
+# インフラ（Terraform）。state に秘密が入るので、イメージには絶対に入れない
+terraform/
+
 # ビルド成果物
 /bin/
 *.exe
