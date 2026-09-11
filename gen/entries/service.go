@@ -11,12 +11,13 @@ import (
 	"context"
 
 	goa "goa.design/goa/v3/pkg"
+	"goa.design/goa/v3/security"
 )
 
 // Journal entries service
 type Service interface {
 	// Create a new journal entry
-	Create(context.Context, *EntryRequest) (res *CreateResult, err error)
+	Create(context.Context, *CreatePayload) (res *CreateResult, err error)
 	// List journal entries
 	List(context.Context, *ListPayload) (res []*Journal, err error)
 	// Get a journal entry by ID
@@ -25,6 +26,12 @@ type Service interface {
 	Update(context.Context, *UpdatePayload) (res *Journal, err error)
 	// Delete a journal entry by ID
 	Delete(context.Context, *DeletePayload) (err error)
+}
+
+// Auther defines the authorization functions to be implemented by the service.
+type Auther interface {
+	// JWTAuth implements the authorization logic for the JWT security scheme.
+	JWTAuth(ctx context.Context, token string, schema *security.JWTScheme) (context.Context, error)
 }
 
 // APIName is the name of the API as defined in the design.
@@ -42,6 +49,17 @@ const ServiceName = "entries"
 // are the same values that are set in the endpoint request contexts under the
 // MethodKey key.
 var MethodNames = [5]string{"create", "list", "get", "update", "delete"}
+
+// CreatePayload is the payload type of the entries service create method.
+type CreatePayload struct {
+	// JWT (Authorization: Bearer <token>)
+	Token *string
+	// 記録日
+	EntryDate string
+	Kind      string
+	Title     string
+	Body      *string
+}
 
 // CreateResult is the result type of the entries service create method.
 type CreateResult struct {
@@ -62,21 +80,16 @@ type CreateResult struct {
 type DeletePayload struct {
 	// Entry ID
 	ID int64
-}
-
-// EntryRequest is the payload type of the entries service create method.
-type EntryRequest struct {
-	// 記録日
-	EntryDate string
-	Kind      string
-	Title     string
-	Body      *string
+	// JWT (Authorization: Bearer <token>)
+	Token *string
 }
 
 // GetPayload is the payload type of the entries service get method.
 type GetPayload struct {
 	// Entry ID
 	ID int64
+	// JWT (Authorization: Bearer <token>)
+	Token *string
 }
 
 // Journal is the result type of the entries service get method.
@@ -98,17 +111,26 @@ type ListPayload struct {
 	Limit int
 	// 先頭から読み飛ばす件数
 	Offset int
+	// JWT (Authorization: Bearer <token>)
+	Token *string
 }
 
 // UpdatePayload is the payload type of the entries service update method.
 type UpdatePayload struct {
 	// Entry ID
 	ID int64
+	// JWT (Authorization: Bearer <token>)
+	Token *string
 	// 記録日
 	EntryDate string
 	Kind      string
 	Title     string
 	Body      *string
+}
+
+// MakeUnauthorized builds a goa.ServiceError from an error.
+func MakeUnauthorized(err error) *goa.ServiceError {
+	return goa.NewServiceError(err, "unauthorized", false, false, false)
 }
 
 // MakeNotFound builds a goa.ServiceError from an error.

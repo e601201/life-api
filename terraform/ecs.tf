@@ -27,12 +27,19 @@ resource "aws_ecs_cluster_capacity_providers" "life" {
 locals {
   image = "${aws_ecr_repository.api.repository_url}:${var.api_image_tag}"
 
-  # DATABASE_URL は環境変数ではなく secrets で渡す。タスク定義の JSON に平文が残らず、
-  # 実行ロールが起動時に SSM から引いて注入する。
-  container_secrets = [
+  # DATABASE_URL と JWT_SECRET は環境変数ではなく secrets で渡す。タスク定義の JSON に
+  # 平文が残らず、実行ロールが起動時に SSM から引いて注入する。
+  database_url_secret = [
     {
       name      = "DATABASE_URL"
       valueFrom = local.database_url_param_arn
+    }
+  ]
+  # 署名鍵は api だけが使う。migrate はスキーマを触るだけなので渡さない。
+  jwt_secret = [
+    {
+      name      = "JWT_SECRET"
+      valueFrom = aws_ssm_parameter.jwt_secret.arn
     }
   ]
 }
@@ -64,7 +71,7 @@ resource "aws_ecs_task_definition" "api" {
           appProtocol   = "http"
         }
       ]
-      secrets = local.container_secrets
+      secrets = concat(local.database_url_secret, local.jwt_secret)
       logConfiguration = {
         logDriver = "awslogs"
         options = {
@@ -100,7 +107,7 @@ resource "aws_ecs_task_definition" "migrate" {
       essential  = true
       entryPoint = ["/life-migrate"]
       command    = ["up"]
-      secrets    = local.container_secrets
+      secrets    = local.database_url_secret
       logConfiguration = {
         logDriver = "awslogs"
         options = {

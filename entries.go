@@ -15,12 +15,15 @@ import (
 // entries service の実装。データは PostgreSQL の entries テーブルに置く
 // （スキーマは db/migrations/000001_create_entries.up.sql）。
 type entriessrvc struct {
+	// 全メソッドが JWT を要求する（design の Security）。生成コードが
+	// Auth.JWTAuth を各メソッドの手前で呼ぶので、埋め込んで満たしておく。
+	*Auth
 	db *pgxpool.Pool
 }
 
 // NewEntries returns the entries service implementation.
-func NewEntries(pool *pgxpool.Pool) entries.Service {
-	return &entriessrvc{db: pool}
+func NewEntries(pool *pgxpool.Pool, auth *Auth) entries.Service {
+	return &entriessrvc{Auth: auth, db: pool}
 }
 
 // journalColumns は Journal を組み立てるのに要る列。SELECT と RETURNING で
@@ -78,20 +81,27 @@ func scanJournal(row pgx.Row) (*entries.Journal, error) {
 }
 
 // Create a new journal entry
-func (s *entriessrvc) Create(ctx context.Context, p *entries.EntryRequest) (*entries.CreateResult, error) {
+func (s *entriessrvc) Create(ctx context.Context, p *entries.CreatePayload) (*entries.CreateResult, error) {
 	log.Printf(ctx, "entries.create")
+
+	// user_id はリクエストではなく JWT から取る（JWTAuth が ctx に載せたもの）。
+	// 無いのは認証を経ずに呼ばれたときで、HTTP 経由では起きない。
+	userID, ok := UserIDFromContext(ctx)
+	if !ok {
+		return nil, errors.New("create entry: no user in context")
+	}
 
 	// id は IDENTITY、created_at / updated_at は DEFAULT now() に任せ、
 	// 採番された値を RETURNING で受け取る。アプリ側で時刻を作らないので、
 	// タスクが複数あってもタイムスタンプの基準がぶれない。
 	//
-	// $1::date のキャストは、text で送った "YYYY-MM-DD" を date として
+	// $2::date のキャストは、text で送った "YYYY-MM-DD" を date として
 	// 解釈させるため。付けないとパラメータの型が決まらず型エラーになる。
-	const q = `INSERT INTO entries (entry_date, kind, title, body)
-	           VALUES ($1::date, $2, $3, $4)
+	const q = `INSERT INTO entries (user_id, entry_date, kind, title, body)
+	           VALUES ($1, $2::date, $3, $4, $5)
 	           RETURNING ` + journalColumns
 
-	j, err := scanJournal(s.db.QueryRow(ctx, q, p.EntryDate, p.Kind, p.Title, p.Body))
+	j, err := scanJournal(s.db.QueryRow(ctx, q, userID, p.EntryDate, p.Kind, p.Title, p.Body))
 	if err != nil {
 		return nil, fmt.Errorf("create entry: %w", err)
 	}

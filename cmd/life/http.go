@@ -12,6 +12,8 @@ import (
 	health "github.com/e601201/life-api/gen/health"
 	entriessvr "github.com/e601201/life-api/gen/http/entries/server"
 	healthsvr "github.com/e601201/life-api/gen/http/health/server"
+	userssvr "github.com/e601201/life-api/gen/http/users/server"
+	users "github.com/e601201/life-api/gen/users"
 	"goa.design/clue/debug"
 	"goa.design/clue/log"
 	goahttp "goa.design/goa/v3/http"
@@ -24,7 +26,7 @@ const maxRequestBody = 1 << 20 // 1MiB
 
 // handleHTTPServer starts configures and starts a HTTP server on the given
 // URL. It shuts down the server if any error is received in the error channel.
-func handleHTTPServer(ctx context.Context, u *url.URL, healthEndpoints *health.Endpoints, entriesEndpoints *entries.Endpoints, wg *sync.WaitGroup, errc chan error, dbg bool) {
+func handleHTTPServer(ctx context.Context, u *url.URL, healthEndpoints *health.Endpoints, usersEndpoints *users.Endpoints, entriesEndpoints *entries.Endpoints, wg *sync.WaitGroup, errc chan error, dbg bool) {
 
 	// Provide the transport specific request decoder and response encoder.
 	// The goa http package has built-in support for JSON, XML and gob.
@@ -54,17 +56,20 @@ func handleHTTPServer(ctx context.Context, u *url.URL, healthEndpoints *health.E
 	// responses.
 	var (
 		healthServer  *healthsvr.Server
+		usersServer   *userssvr.Server
 		entriesServer *entriessvr.Server
 	)
 	{
 		eh := errorHandler(ctx)
 		ef := errorFormatter(ctx)
 		healthServer = healthsvr.New(healthEndpoints, mux, dec, enc, eh, ef)
+		usersServer = userssvr.New(usersEndpoints, mux, dec, enc, eh, ef)
 		entriesServer = entriessvr.New(entriesEndpoints, mux, dec, enc, eh, ef)
 	}
 
 	// Configure the mux.
 	healthsvr.Mount(mux, healthServer)
+	userssvr.Mount(mux, usersServer)
 	entriessvr.Mount(mux, entriesServer)
 
 	var handler http.Handler = mux
@@ -79,7 +84,7 @@ func handleHTTPServer(ctx context.Context, u *url.URL, healthEndpoints *health.E
 
 	// http.Server のタイムアウトは既定でどれも無制限。放っておくと、遅い
 	// （あるいは意図的に遅くした）クライアント 1 本が接続を掴んだままになる。
-	// 認証なしで外に出す構成なので、読み・書き・アイドルのそれぞれに上限を置く。
+	// 登録とログインは認証なしで叩けるので、読み・書き・アイドルのそれぞれに上限を置く。
 	srv := &http.Server{
 		Addr:              u.Host,
 		Handler:           handler,
@@ -89,6 +94,9 @@ func handleHTTPServer(ctx context.Context, u *url.URL, healthEndpoints *health.E
 		IdleTimeout:       120 * time.Second,
 	}
 	for _, m := range healthServer.Mounts {
+		log.Printf(ctx, "HTTP %q mounted on %s %s", m.Method, m.Verb, m.Pattern)
+	}
+	for _, m := range usersServer.Mounts {
 		log.Printf(ctx, "HTTP %q mounted on %s %s", m.Method, m.Verb, m.Pattern)
 	}
 	for _, m := range entriesServer.Mounts {

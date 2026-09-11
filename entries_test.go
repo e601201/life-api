@@ -6,7 +6,7 @@ package life
 //
 // 接続先は TEST_DATABASE_URL で渡す。未設定なら skip するので、DB の無い環境でも
 // go test ./... は通る。DATABASE_URL ではなく専用の変数を見るのは、テストが
-// entries テーブルを空にするため。開発用の DB を取り違えて消さないようにしている。
+// entries と users テーブルを空にするため。開発用の DB を取り違えて消さないようにしている。
 //
 //	docker compose exec db psql -U life -d postgres -c 'CREATE DATABASE life_test'
 //	TEST_DATABASE_URL='postgres://life:life@localhost:5432/life_test?sslmode=disable' go test ./...
@@ -31,6 +31,20 @@ var (
 	testPool  *pgxpool.Pool
 	testDBURL string
 )
+
+// testSecret はテスト用の署名鍵。本物の鍵ではなく、minSecretLen を満たす固定値。
+const testSecret = "test-secret-for-life-api-unit-tests-only"
+
+// testAuth はテスト全体で共有する Auth。時刻を動かしたいテストは newTestAuth で別に作る。
+var testAuth = mustNewAuth()
+
+func mustNewAuth() *Auth {
+	a, err := NewAuth(testSecret)
+	if err != nil {
+		panic(err)
+	}
+	return a
+}
 
 func TestMain(m *testing.M) {
 	url := os.Getenv("TEST_DATABASE_URL")
@@ -65,23 +79,45 @@ func requireDB(t *testing.T) {
 	}
 }
 
-// newService はテスト用のサービスを返す。テーブルを空にし、id の採番も 1 に戻すので、
-// テストごとに同じ前提から始められる。
-func newService(t *testing.T) (entries.Service, context.Context) {
+// resetTables はテーブルを空にし、id の採番も 1 に戻す。テストごとに同じ前提から
+// 始められる。entries は users を FK で参照しているので、まとめて 1 文で消す。
+func resetTables(t *testing.T) context.Context {
 	t.Helper()
 	requireDB(t)
 	ctx := context.Background()
-	if _, err := testPool.Exec(ctx, "TRUNCATE entries RESTART IDENTITY"); err != nil {
-		t.Fatalf("truncate entries: %v", err)
+	if _, err := testPool.Exec(ctx, "TRUNCATE entries, users RESTART IDENTITY"); err != nil {
+		t.Fatalf("truncate: %v", err)
 	}
-	return NewEntries(testPool), ctx
+	return ctx
+}
+
+// insertUser は users に 1 行入れて id を返す。entries のテストは「誰か」が居ないと
+// 作成できない（user_id の FK）ので、users サービスを経由せずに直接入れる。
+// password_hash はログインしないので何でもよい。
+func insertUser(t *testing.T, ctx context.Context, email string) int64 {
+	t.Helper()
+	const q = `INSERT INTO users (email, password_hash) VALUES ($1, 'unused') RETURNING id`
+	var id int64
+	if err := testPool.QueryRow(ctx, q, email).Scan(&id); err != nil {
+		t.Fatalf("insert user %q: %v", email, err)
+	}
+	return id
+}
+
+// newService はテスト用の entries サービスと、認証済みユーザを載せた ctx を返す。
+// HTTP 経由なら JWTAuth が ctx にユーザ ID を入れるところを、ここでは直接入れる。
+func newService(t *testing.T) (entries.Service, context.Context) {
+	t.Helper()
+	ctx := resetTables(t)
+	uid := insertUser(t, ctx, "entries@example.com")
+	return NewEntries(testPool, testAuth), ContextWithUserID(ctx, uid)
 }
 
 // mustCreate は前提となる 1 件を作る。作成そのものの検証は TestCreate でやるので、
 // ここで失敗したらテストを続ける意味がない。
 func mustCreate(t *testing.T, ctx context.Context, svc entries.Service, date, title string) *entries.CreateResult {
 	t.Helper()
-	res, err := svc.Create(ctx, &entries.EntryRequest{EntryDate: date, Kind: "til", Title: title})
+	res, err := svc.Create(ctx, &entries.CreatePayload{EntryDate: date, Kind: "til", Title: title})
 	if err != nil {
 		t.Fatalf("create %q: %v", title, err)
 	}
@@ -133,7 +169,7 @@ func TestCreate(t *testing.T) {
 	svc, ctx := newService(t)
 
 	body := "本文"
-	res, err := svc.Create(ctx, &entries.EntryRequest{
+	res, err := svc.Create(ctx, &entries.CreatePayload{
 		EntryDate: "2026-09-01",
 		Kind:      "til",
 		Title:     "作成",
@@ -155,9 +191,10 @@ func TestCreate(t *testing.T) {
 		t.Errorf("created_at = %s, updated_at = %s, どちらも入っていること",
 			derefString(res.CreatedAt), derefString(res.UpdatedAt))
 	}
-	// user_id はリクエストから受け取らないため、W3 で JWT を入れるまでは NULL。
-	if res.UserID != nil {
-		t.Errorf("user_id = %d, want nil", *res.UserID)
+	// user_id はリクエストではなく ctx（HTTP なら JWT の sub）から入る。
+	wantUser, _ := UserIDFromContext(ctx)
+	if res.UserID == nil || *res.UserID != wantUser {
+		t.Errorf("user_id = %s, want %d", derefInt64(res.UserID), wantUser)
 	}
 	if res.EntryDate != "2026-09-01" || res.Kind != "til" || res.Title != "作成" {
 		t.Errorf("entry_date/kind/title = %q/%q/%q, want %q/%q/%q",
@@ -177,11 +214,26 @@ func TestCreate(t *testing.T) {
 	}
 }
 
+func TestCreateWithoutUser(t *testing.T) {
+	svc, _ := newService(t)
+
+	// 認証を経ていない ctx では作れない。HTTP では JWTAuth が先に 401 を返すので
+	// ここには来ないが、サービスを直接呼ぶ経路で user_id が NULL のまま入るのを防ぐ。
+	_, err := svc.Create(context.Background(), &entries.CreatePayload{
+		EntryDate: "2026-09-01",
+		Kind:      "til",
+		Title:     "ユーザなし",
+	})
+	if err == nil {
+		t.Fatal("ユーザの無い ctx で作成できている")
+	}
+}
+
 func TestCreateWithoutBody(t *testing.T) {
 	svc, ctx := newService(t)
 
 	// body は任意。省略したら空文字ではなく NULL のまま返る。
-	res, err := svc.Create(ctx, &entries.EntryRequest{
+	res, err := svc.Create(ctx, &entries.CreatePayload{
 		EntryDate: "2026-09-01",
 		Kind:      "diary",
 		Title:     "本文なし",
@@ -279,7 +331,7 @@ func TestUpdateClearsBody(t *testing.T) {
 	svc, ctx := newService(t)
 
 	body := "消される本文"
-	created, err := svc.Create(ctx, &entries.EntryRequest{
+	created, err := svc.Create(ctx, &entries.CreatePayload{
 		EntryDate: "2026-09-01",
 		Kind:      "til",
 		Title:     "本文あり",

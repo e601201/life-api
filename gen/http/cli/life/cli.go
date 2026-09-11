@@ -15,6 +15,7 @@ import (
 
 	entriesc "github.com/e601201/life-api/gen/http/entries/client"
 	healthc "github.com/e601201/life-api/gen/http/health/client"
+	usersc "github.com/e601201/life-api/gen/http/users/client"
 	goahttp "goa.design/goa/v3/http"
 	goa "goa.design/goa/v3/pkg"
 )
@@ -25,6 +26,7 @@ import (
 func UsageCommands() []string {
 	return []string{
 		"health check",
+		"users (register|login|me)",
 		"entries (create|list|get|update|delete)",
 	}
 }
@@ -32,7 +34,8 @@ func UsageCommands() []string {
 // UsageExamples produces an example of a valid invocation of the CLI tool.
 func UsageExamples() string {
 	return os.Args[0] + " " + "health check" + "\n" +
-		os.Args[0] + " " + "entries create --body '{\n      \"body\": \"Temporibus neque cumque fuga sit quae esse.\",\n      \"entry_date\": \"1994-04-12\",\n      \"kind\": \"diary\",\n      \"title\": \"u\"\n   }'" + "\n" +
+		os.Args[0] + " " + "users register --body '{\n      \"email\": \"c59\",\n      \"password\": \"082\"\n   }'" + "\n" +
+		os.Args[0] + " " + "entries create --body '{\n      \"body\": \"Temporibus neque cumque fuga sit quae esse.\",\n      \"entry_date\": \"1994-04-12\",\n      \"kind\": \"diary\",\n      \"title\": \"u\"\n   }' --token \"Ipsum voluptatem aspernatur voluptatem dignissimos est.\"" + "\n" +
 		""
 }
 
@@ -50,27 +53,48 @@ func ParseEndpoint(
 
 		healthCheckFlags = flag.NewFlagSet("check", flag.ExitOnError)
 
+		usersFlags = flag.NewFlagSet("users", flag.ContinueOnError)
+
+		usersRegisterFlags    = flag.NewFlagSet("register", flag.ExitOnError)
+		usersRegisterBodyFlag = usersRegisterFlags.String("body", "REQUIRED", "")
+
+		usersLoginFlags    = flag.NewFlagSet("login", flag.ExitOnError)
+		usersLoginBodyFlag = usersLoginFlags.String("body", "REQUIRED", "")
+
+		usersMeFlags     = flag.NewFlagSet("me", flag.ExitOnError)
+		usersMeTokenFlag = usersMeFlags.String("token", "", "")
+
 		entriesFlags = flag.NewFlagSet("entries", flag.ContinueOnError)
 
-		entriesCreateFlags    = flag.NewFlagSet("create", flag.ExitOnError)
-		entriesCreateBodyFlag = entriesCreateFlags.String("body", "REQUIRED", "")
+		entriesCreateFlags     = flag.NewFlagSet("create", flag.ExitOnError)
+		entriesCreateBodyFlag  = entriesCreateFlags.String("body", "REQUIRED", "")
+		entriesCreateTokenFlag = entriesCreateFlags.String("token", "", "")
 
 		entriesListFlags      = flag.NewFlagSet("list", flag.ExitOnError)
 		entriesListLimitFlag  = entriesListFlags.String("limit", "10", "")
 		entriesListOffsetFlag = entriesListFlags.String("offset", "", "")
+		entriesListTokenFlag  = entriesListFlags.String("token", "", "")
 
-		entriesGetFlags  = flag.NewFlagSet("get", flag.ExitOnError)
-		entriesGetIDFlag = entriesGetFlags.String("id", "REQUIRED", "Entry ID")
+		entriesGetFlags     = flag.NewFlagSet("get", flag.ExitOnError)
+		entriesGetIDFlag    = entriesGetFlags.String("id", "REQUIRED", "Entry ID")
+		entriesGetTokenFlag = entriesGetFlags.String("token", "", "")
 
-		entriesUpdateFlags    = flag.NewFlagSet("update", flag.ExitOnError)
-		entriesUpdateBodyFlag = entriesUpdateFlags.String("body", "REQUIRED", "")
-		entriesUpdateIDFlag   = entriesUpdateFlags.String("id", "REQUIRED", "Entry ID")
+		entriesUpdateFlags     = flag.NewFlagSet("update", flag.ExitOnError)
+		entriesUpdateBodyFlag  = entriesUpdateFlags.String("body", "REQUIRED", "")
+		entriesUpdateIDFlag    = entriesUpdateFlags.String("id", "REQUIRED", "Entry ID")
+		entriesUpdateTokenFlag = entriesUpdateFlags.String("token", "", "")
 
-		entriesDeleteFlags  = flag.NewFlagSet("delete", flag.ExitOnError)
-		entriesDeleteIDFlag = entriesDeleteFlags.String("id", "REQUIRED", "Entry ID")
+		entriesDeleteFlags     = flag.NewFlagSet("delete", flag.ExitOnError)
+		entriesDeleteIDFlag    = entriesDeleteFlags.String("id", "REQUIRED", "Entry ID")
+		entriesDeleteTokenFlag = entriesDeleteFlags.String("token", "", "")
 	)
 	healthFlags.Usage = healthUsage
 	healthCheckFlags.Usage = healthCheckUsage
+
+	usersFlags.Usage = usersUsage
+	usersRegisterFlags.Usage = usersRegisterUsage
+	usersLoginFlags.Usage = usersLoginUsage
+	usersMeFlags.Usage = usersMeUsage
 
 	entriesFlags.Usage = entriesUsage
 	entriesCreateFlags.Usage = entriesCreateUsage
@@ -96,6 +120,8 @@ func ParseEndpoint(
 		switch svcn {
 		case "health":
 			svcf = healthFlags
+		case "users":
+			svcf = usersFlags
 		case "entries":
 			svcf = entriesFlags
 		default:
@@ -117,6 +143,19 @@ func ParseEndpoint(
 			switch epn {
 			case "check":
 				epf = healthCheckFlags
+
+			}
+
+		case "users":
+			switch epn {
+			case "register":
+				epf = usersRegisterFlags
+
+			case "login":
+				epf = usersLoginFlags
+
+			case "me":
+				epf = usersMeFlags
 
 			}
 
@@ -165,24 +204,37 @@ func ParseEndpoint(
 			case "check":
 				endpoint = c.Check()
 			}
+		case "users":
+			c := usersc.NewClient(scheme, host, doer, enc, dec, restore)
+			switch epn {
+			case "register":
+				endpoint = c.Register()
+				data, err = usersc.BuildRegisterPayload(*usersRegisterBodyFlag)
+			case "login":
+				endpoint = c.Login()
+				data, err = usersc.BuildLoginPayload(*usersLoginBodyFlag)
+			case "me":
+				endpoint = c.Me()
+				data, err = usersc.BuildMePayload(*usersMeTokenFlag)
+			}
 		case "entries":
 			c := entriesc.NewClient(scheme, host, doer, enc, dec, restore)
 			switch epn {
 			case "create":
 				endpoint = c.Create()
-				data, err = entriesc.BuildCreatePayload(*entriesCreateBodyFlag)
+				data, err = entriesc.BuildCreatePayload(*entriesCreateBodyFlag, *entriesCreateTokenFlag)
 			case "list":
 				endpoint = c.List()
-				data, err = entriesc.BuildListPayload(*entriesListLimitFlag, *entriesListOffsetFlag)
+				data, err = entriesc.BuildListPayload(*entriesListLimitFlag, *entriesListOffsetFlag, *entriesListTokenFlag)
 			case "get":
 				endpoint = c.Get()
-				data, err = entriesc.BuildGetPayload(*entriesGetIDFlag)
+				data, err = entriesc.BuildGetPayload(*entriesGetIDFlag, *entriesGetTokenFlag)
 			case "update":
 				endpoint = c.Update()
-				data, err = entriesc.BuildUpdatePayload(*entriesUpdateBodyFlag, *entriesUpdateIDFlag)
+				data, err = entriesc.BuildUpdatePayload(*entriesUpdateBodyFlag, *entriesUpdateIDFlag, *entriesUpdateTokenFlag)
 			case "delete":
 				endpoint = c.Delete()
-				data, err = entriesc.BuildDeletePayload(*entriesDeleteIDFlag)
+				data, err = entriesc.BuildDeletePayload(*entriesDeleteIDFlag, *entriesDeleteTokenFlag)
 			}
 		}
 	}
@@ -219,6 +271,72 @@ func healthCheckUsage() {
 	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "health check")
 }
 
+// usersUsage displays the usage of the users command and its subcommands.
+func usersUsage() {
+	fmt.Fprintln(os.Stderr, `User registration and authentication`)
+	fmt.Fprintf(os.Stderr, "Usage:\n    %s [globalflags] users COMMAND [flags]\n\n", os.Args[0])
+	fmt.Fprintln(os.Stderr, "COMMAND:")
+	fmt.Fprintln(os.Stderr, `    register: Register a new user`)
+	fmt.Fprintln(os.Stderr, `    login: Issue a JWT for the given credentials`)
+	fmt.Fprintln(os.Stderr, `    me: Return the authenticated user`)
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, "Additional help:")
+	fmt.Fprintf(os.Stderr, "    %s users COMMAND --help\n", os.Args[0])
+}
+func usersRegisterUsage() {
+	// Header with flags
+	fmt.Fprintf(os.Stderr, "%s [flags] users register", os.Args[0])
+	fmt.Fprint(os.Stderr, " -body JSON")
+	fmt.Fprintln(os.Stderr)
+
+	// Description
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, `Register a new user`)
+
+	// Flags list
+	fmt.Fprintln(os.Stderr, `    -body JSON: `)
+
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, "Example:")
+	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "users register --body '{\n      \"email\": \"c59\",\n      \"password\": \"082\"\n   }'")
+}
+
+func usersLoginUsage() {
+	// Header with flags
+	fmt.Fprintf(os.Stderr, "%s [flags] users login", os.Args[0])
+	fmt.Fprint(os.Stderr, " -body JSON")
+	fmt.Fprintln(os.Stderr)
+
+	// Description
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, `Issue a JWT for the given credentials`)
+
+	// Flags list
+	fmt.Fprintln(os.Stderr, `    -body JSON: `)
+
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, "Example:")
+	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "users login --body '{\n      \"email\": \"Corrupti distinctio dolorem adipisci odio eum enim.\",\n      \"password\": \"Itaque explicabo et aperiam.\"\n   }'")
+}
+
+func usersMeUsage() {
+	// Header with flags
+	fmt.Fprintf(os.Stderr, "%s [flags] users me", os.Args[0])
+	fmt.Fprint(os.Stderr, " -token STRING")
+	fmt.Fprintln(os.Stderr)
+
+	// Description
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, `Return the authenticated user`)
+
+	// Flags list
+	fmt.Fprintln(os.Stderr, `    -token STRING: `)
+
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, "Example:")
+	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "users me --token \"Ut quos harum facilis architecto qui.\"")
+}
+
 // entriesUsage displays the usage of the entries command and its subcommands.
 func entriesUsage() {
 	fmt.Fprintln(os.Stderr, `Journal entries service`)
@@ -237,6 +355,7 @@ func entriesCreateUsage() {
 	// Header with flags
 	fmt.Fprintf(os.Stderr, "%s [flags] entries create", os.Args[0])
 	fmt.Fprint(os.Stderr, " -body JSON")
+	fmt.Fprint(os.Stderr, " -token STRING")
 	fmt.Fprintln(os.Stderr)
 
 	// Description
@@ -245,10 +364,11 @@ func entriesCreateUsage() {
 
 	// Flags list
 	fmt.Fprintln(os.Stderr, `    -body JSON: `)
+	fmt.Fprintln(os.Stderr, `    -token STRING: `)
 
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, "Example:")
-	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "entries create --body '{\n      \"body\": \"Temporibus neque cumque fuga sit quae esse.\",\n      \"entry_date\": \"1994-04-12\",\n      \"kind\": \"diary\",\n      \"title\": \"u\"\n   }'")
+	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "entries create --body '{\n      \"body\": \"Temporibus neque cumque fuga sit quae esse.\",\n      \"entry_date\": \"1994-04-12\",\n      \"kind\": \"diary\",\n      \"title\": \"u\"\n   }' --token \"Ipsum voluptatem aspernatur voluptatem dignissimos est.\"")
 }
 
 func entriesListUsage() {
@@ -256,6 +376,7 @@ func entriesListUsage() {
 	fmt.Fprintf(os.Stderr, "%s [flags] entries list", os.Args[0])
 	fmt.Fprint(os.Stderr, " -limit INT")
 	fmt.Fprint(os.Stderr, " -offset INT")
+	fmt.Fprint(os.Stderr, " -token STRING")
 	fmt.Fprintln(os.Stderr)
 
 	// Description
@@ -265,16 +386,18 @@ func entriesListUsage() {
 	// Flags list
 	fmt.Fprintln(os.Stderr, `    -limit INT: `)
 	fmt.Fprintln(os.Stderr, `    -offset INT: `)
+	fmt.Fprintln(os.Stderr, `    -token STRING: `)
 
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, "Example:")
-	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "entries list --limit 15 --offset 1831350278493953792")
+	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "entries list --limit 15 --offset 1831350278493953792 --token \"Earum quo aspernatur minima perspiciatis aliquid voluptates.\"")
 }
 
 func entriesGetUsage() {
 	// Header with flags
 	fmt.Fprintf(os.Stderr, "%s [flags] entries get", os.Args[0])
 	fmt.Fprint(os.Stderr, " -id INT64")
+	fmt.Fprint(os.Stderr, " -token STRING")
 	fmt.Fprintln(os.Stderr)
 
 	// Description
@@ -283,10 +406,11 @@ func entriesGetUsage() {
 
 	// Flags list
 	fmt.Fprintln(os.Stderr, `    -id INT64: Entry ID`)
+	fmt.Fprintln(os.Stderr, `    -token STRING: `)
 
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, "Example:")
-	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "entries get --id 2136939742502294428")
+	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "entries get --id 2136939742502294428 --token \"Velit quia.\"")
 }
 
 func entriesUpdateUsage() {
@@ -294,6 +418,7 @@ func entriesUpdateUsage() {
 	fmt.Fprintf(os.Stderr, "%s [flags] entries update", os.Args[0])
 	fmt.Fprint(os.Stderr, " -body JSON")
 	fmt.Fprint(os.Stderr, " -id INT64")
+	fmt.Fprint(os.Stderr, " -token STRING")
 	fmt.Fprintln(os.Stderr)
 
 	// Description
@@ -303,16 +428,18 @@ func entriesUpdateUsage() {
 	// Flags list
 	fmt.Fprintln(os.Stderr, `    -body JSON: `)
 	fmt.Fprintln(os.Stderr, `    -id INT64: Entry ID`)
+	fmt.Fprintln(os.Stderr, `    -token STRING: `)
 
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, "Example:")
-	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "entries update --body '{\n      \"body\": \"Natus maiores quasi.\",\n      \"entry_date\": \"1998-12-26\",\n      \"kind\": \"til\",\n      \"title\": \"r\"\n   }' --id 6545909915602064166")
+	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "entries update --body '{\n      \"body\": \"Natus maiores quasi.\",\n      \"entry_date\": \"1998-12-26\",\n      \"kind\": \"til\",\n      \"title\": \"r\"\n   }' --id 6545909915602064166 --token \"Maxime ipsam ut quasi ea nulla.\"")
 }
 
 func entriesDeleteUsage() {
 	// Header with flags
 	fmt.Fprintf(os.Stderr, "%s [flags] entries delete", os.Args[0])
 	fmt.Fprint(os.Stderr, " -id INT64")
+	fmt.Fprint(os.Stderr, " -token STRING")
 	fmt.Fprintln(os.Stderr)
 
 	// Description
@@ -321,8 +448,9 @@ func entriesDeleteUsage() {
 
 	// Flags list
 	fmt.Fprintln(os.Stderr, `    -id INT64: Entry ID`)
+	fmt.Fprintln(os.Stderr, `    -token STRING: `)
 
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, "Example:")
-	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "entries delete --id 5830450457673791293")
+	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "entries delete --id 5830450457673791293 --token \"Fugit iure aspernatur iusto dolorem.\"")
 }

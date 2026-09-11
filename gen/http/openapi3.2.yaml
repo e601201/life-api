@@ -116,6 +116,14 @@ paths:
                                   title: j
                                   updated_at: "2004-10-20T00:36:43Z"
                                   user_id: 8220775752495052168
+                "401":
+                    description: 'unauthorized: Unauthorized response.'
+                    content:
+                        application/vnd.goa.error:
+                            schema:
+                                $ref: '#/components/schemas/Error'
+            security:
+                - jwt_header_Authorization: []
         post:
             tags:
                 - entries
@@ -128,7 +136,7 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/EntryRequest'
+                            $ref: '#/components/schemas/CreateRequestBody'
                         example:
                             body: Temporibus neque cumque fuga sit quae esse.
                             entry_date: "1994-04-12"
@@ -158,6 +166,14 @@ paths:
                                 title: ri
                                 updated_at: "2011-10-20T03:00:30Z"
                                 user_id: 535544025447781906
+                "401":
+                    description: 'unauthorized: Unauthorized response.'
+                    content:
+                        application/vnd.goa.error:
+                            schema:
+                                $ref: '#/components/schemas/Error'
+            security:
+                - jwt_header_Authorization: []
     /entries/{id}:
         delete:
             tags:
@@ -179,12 +195,20 @@ paths:
             responses:
                 "204":
                     description: No Content response.
+                "401":
+                    description: 'unauthorized: Unauthorized response.'
+                    content:
+                        application/vnd.goa.error:
+                            schema:
+                                $ref: '#/components/schemas/Error'
                 "404":
                     description: 'not_found: Not Found response.'
                     content:
                         application/vnd.goa.error:
                             schema:
                                 $ref: '#/components/schemas/Error'
+            security:
+                - jwt_header_Authorization: []
         get:
             tags:
                 - entries
@@ -218,12 +242,20 @@ paths:
                                 title: tyz
                                 updated_at: "2001-10-21T09:21:16Z"
                                 user_id: 1741871451947034476
+                "401":
+                    description: 'unauthorized: Unauthorized response.'
+                    content:
+                        application/vnd.goa.error:
+                            schema:
+                                $ref: '#/components/schemas/Error'
                 "404":
                     description: 'not_found: Not Found response.'
                     content:
                         application/vnd.goa.error:
                             schema:
                                 $ref: '#/components/schemas/Error'
+            security:
+                - jwt_header_Authorization: []
         put:
             tags:
                 - entries
@@ -247,7 +279,7 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/EntryRequest'
+                            $ref: '#/components/schemas/CreateRequestBody'
                         example:
                             body: Natus maiores quasi.
                             entry_date: "1998-12-26"
@@ -269,12 +301,20 @@ paths:
                                 title: "7"
                                 updated_at: "1986-10-15T18:33:16Z"
                                 user_id: 3366940458952493031
+                "401":
+                    description: 'unauthorized: Unauthorized response.'
+                    content:
+                        application/vnd.goa.error:
+                            schema:
+                                $ref: '#/components/schemas/Error'
                 "404":
                     description: 'not_found: Not Found response.'
                     content:
                         application/vnd.goa.error:
                             schema:
                                 $ref: '#/components/schemas/Error'
+            security:
+                - jwt_header_Authorization: []
     /health:
         get:
             tags:
@@ -298,8 +338,139 @@ paths:
                         application/vnd.goa.error:
                             schema:
                                 $ref: '#/components/schemas/Error'
+    /users:
+        post:
+            tags:
+                - users
+            summary: register users
+            description: Register a new user
+            operationId: users#register
+            requestBody:
+                description: Request body for register.
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/Credentials'
+                        example:
+                            email: c59
+                            password: "082"
+            responses:
+                "201":
+                    description: Created response.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/User'
+                            example:
+                                created_at: "1996-12-04T02:46:36Z"
+                                email: franco.schneider@sawayn.biz
+                                id: 1263124488198266759
+                "400":
+                    description: 'password_too_long: Bad Request response.'
+                    content:
+                        application/vnd.goa.error:
+                            schema:
+                                $ref: '#/components/schemas/Error'
+                "409":
+                    description: 'conflict: Conflict response.'
+                    content:
+                        application/vnd.goa.error:
+                            schema:
+                                $ref: '#/components/schemas/Error'
+    /users/login:
+        post:
+            tags:
+                - users
+            summary: login users
+            description: Issue a JWT for the given credentials
+            operationId: users#login
+            requestBody:
+                description: Request body for login.
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/LoginRequestBody'
+                        example:
+                            email: Corrupti distinctio dolorem adipisci odio eum enim.
+                            password: Itaque explicabo et aperiam.
+            responses:
+                "200":
+                    description: OK response.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/TokenResponse'
+                            example:
+                                access_token: Quaerat at temporibus placeat quia.
+                                expires_in: 1538577738388422323
+                                token_type: Bearer
+                "401":
+                    description: 'unauthorized: Unauthorized response.'
+                    content:
+                        application/vnd.goa.error:
+                            schema:
+                                $ref: '#/components/schemas/Error'
+    /users/me:
+        get:
+            tags:
+                - users
+            summary: me users
+            description: Return the authenticated user
+            operationId: users#me
+            responses:
+                "200":
+                    description: OK response.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/User'
+                            example:
+                                created_at: "1973-05-15T20:50:08Z"
+                                email: furman.lowe@senger.info
+                                id: 4753831169246844214
+                "401":
+                    description: 'unauthorized: Unauthorized response.'
+                    content:
+                        application/vnd.goa.error:
+                            schema:
+                                $ref: '#/components/schemas/Error'
+            security:
+                - jwt_header_Authorization: []
 components:
     schemas:
+        CreateRequestBody:
+            type: object
+            properties:
+                body:
+                    type: string
+                    example: Temporibus neque cumque fuga sit quae esse.
+                entry_date:
+                    type: string
+                    description: 記録日
+                    example: "1994-04-12"
+                    format: date
+                kind:
+                    type: string
+                    example: diary
+                    enum:
+                        - til
+                        - diary
+                title:
+                    type: string
+                    example: u
+                    minLength: 1
+            description: Request body for create.
+            example:
+                body: Temporibus neque cumque fuga sit quae esse.
+                entry_date: "1994-04-12"
+                kind: diary
+                title: u
+            required:
+                - title
+                - entry_date
+                - kind
         CreateResponseBody:
             type: object
             properties:
@@ -350,37 +521,28 @@ components:
                 - title
                 - entry_date
                 - kind
-        EntryRequest:
+        Credentials:
             type: object
             properties:
-                body:
+                email:
                     type: string
-                    example: Temporibus neque cumque fuga sit quae esse.
-                entry_date:
+                    description: メールアドレス（大文字小文字は区別しない）
+                    example: c59
+                    format: email
+                    maxLength: 254
+                password:
                     type: string
-                    description: 記録日
-                    example: "1994-04-12"
-                    format: date
-                kind:
-                    type: string
-                    example: diary
-                    enum:
-                        - til
-                        - diary
-                title:
-                    type: string
-                    example: u
-                    minLength: 1
-            description: Request body for create.
+                    description: パスワード（8 文字以上、72 バイト以内）
+                    example: "082"
+                    minLength: 8
+                    maxLength: 72
+            description: Request body for register.
             example:
-                body: Temporibus neque cumque fuga sit quae esse.
-                entry_date: "1994-04-12"
-                kind: diary
-                title: u
+                email: c59
+                password: "082"
             required:
-                - title
-                - entry_date
-                - kind
+                - email
+                - password
         Error:
             type: object
             properties:
@@ -474,8 +636,84 @@ components:
                 - title
                 - entry_date
                 - kind
+        LoginRequestBody:
+            type: object
+            properties:
+                email:
+                    type: string
+                    description: メールアドレス（大文字小文字は区別しない）
+                    example: Corrupti distinctio dolorem adipisci odio eum enim.
+                password:
+                    type: string
+                    example: Itaque explicabo et aperiam.
+            description: Request body for login.
+            example:
+                email: Corrupti distinctio dolorem adipisci odio eum enim.
+                password: Itaque explicabo et aperiam.
+            required:
+                - email
+                - password
+        TokenResponse:
+            type: object
+            properties:
+                access_token:
+                    type: string
+                    description: JWT
+                    example: Quaerat at temporibus placeat quia.
+                expires_in:
+                    type: integer
+                    description: 有効期限までの秒数
+                    example: 1538577738388422323
+                    format: int64
+                token_type:
+                    type: string
+                    description: 常に Bearer
+                    example: Bearer
+                    enum:
+                        - Bearer
+            description: Issued JWT
+            example:
+                access_token: Quaerat at temporibus placeat quia.
+                expires_in: 1538577738388422323
+                token_type: Bearer
+            required:
+                - access_token
+                - token_type
+                - expires_in
+        User:
+            type: object
+            properties:
+                created_at:
+                    type: string
+                    example: "1996-12-04T02:46:36Z"
+                    format: date-time
+                email:
+                    type: string
+                    example: franco.schneider@sawayn.biz
+                    format: email
+                id:
+                    type: integer
+                    example: 1263124488198266759
+                    format: int64
+            description: A registered user
+            example:
+                created_at: "1996-12-04T02:46:36Z"
+                email: franco.schneider@sawayn.biz
+                id: 1263124488198266759
+            required:
+                - id
+                - email
+                - created_at
+    securitySchemes:
+        jwt_header_Authorization:
+            type: http
+            description: 'Authorization: Bearer <JWT>. users.login で発行したトークンを渡す'
+            scheme: bearer
+            bearerFormat: JWT
 tags:
-    - name: health
-      description: health check this server
     - name: entries
       description: Journal entries service
+    - name: health
+      description: health check this server
+    - name: users
+      description: User registration and authentication

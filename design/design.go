@@ -11,6 +11,26 @@ var _ = API("life", func() {
 	})
 })
 
+// JWTAuth は Authorization: Bearer <JWT> で認証するスキーム。
+// 発行は users.login、検証は各サービスの JWTAuth（auth.go）でやる。
+// 署名鍵は環境変数 JWT_SECRET で渡し、リポジトリには置かない。
+//
+// スコープは定義しない。ユーザは自分のデータしか触れないので、
+// 「誰か」が分かれば十分で、権限の粒度はまだ要らない。
+var JWTAuth = JWTSecurity("jwt", func() {
+	Description("Authorization: Bearer <JWT>. users.login で発行したトークンを渡す")
+})
+
+// jwtToken は JWT で守るメソッドの Payload に置くトークン属性。HTTP では
+// Authorization ヘッダに暗黙でマップされる（Bearer の接頭辞は生成コードが剥がす）。
+//
+// Required にしない理由: 必須にするとヘッダ無しのリクエストが Goa のデコード段階で
+// 400（missing_field）になる。認証の失敗は 401 で返したいので、空のまま
+// JWTAuth まで通して、そこで unauthorized にする。
+func jwtToken() {
+	Token("token", String, "JWT (Authorization: Bearer <token>)")
+}
+
 var _ = Service("health", func() {
 	Description("health check this server")
 
@@ -29,9 +49,122 @@ var _ = Service("health", func() {
 	})
 })
 
+// Credentials は登録時に受け取る email / password。パスワードの制約はここに置く。
+var Credentials = Type("Credentials", func() {
+	Description("Email and password for registration")
+
+	Attribute("email", String, "メールアドレス（大文字小文字は区別しない）", func() {
+		Format(FormatEmail)
+		// RFC 5321 のアドレス長の上限
+		MaxLength(254)
+	})
+	// 下限は NIST SP 800-63B の推奨（8 文字）。上限はハッシュに使う bcrypt が
+	// 72 バイトまでしか見ないため。MaxLength は文字数を数えるので、マルチバイトだと
+	// 72 文字以内でも 72 バイトを超えうる。その場合は実装側で password_too_long にする。
+	Attribute("password", String, "パスワード（8 文字以上、72 バイト以内）", func() {
+		MinLength(8)
+		MaxLength(72)
+	})
+
+	Required("email", "password")
+})
+
+// User は API が返すユーザ。password_hash は絶対に出さない。
+var User = Type("User", func() {
+	Description("A registered user")
+
+	Attribute("id", Int64)
+	Attribute("email", String, func() {
+		Format(FormatEmail)
+	})
+	Attribute("created_at", String, func() {
+		Format(FormatDateTime)
+	})
+
+	Required("id", "email", "created_at")
+})
+
+// TokenResponse は login の結果。フィールド名は OAuth 2.0 のトークンレスポンス
+// （RFC 6749 §5.1）に合わせてあるので、汎用のクライアントがそのまま読める。
+// （AccessToken は DSL の関数名と衝突するので、この名前にしている）
+var TokenResponse = Type("TokenResponse", func() {
+	Description("Issued JWT")
+
+	Attribute("access_token", String, "JWT")
+	Attribute("token_type", String, "常に Bearer", func() {
+		Enum("Bearer")
+	})
+	Attribute("expires_in", Int, "有効期限までの秒数")
+
+	Required("access_token", "token_type", "expires_in")
+})
+
+// Service users: 登録 / ログイン（JWT 発行）/ 自分の情報。
+//
+// register と login は認証なしで叩ける（トークンを持っていない状態で使うため）。
+// me だけ JWT を要求し、トークンの検証が通っていることの確認にも使う。
+var _ = Service("users", func() {
+	Description("User registration and authentication")
+
+	Method("register", func() {
+		Description("Register a new user")
+		Payload(Credentials)
+		Result(User)
+		// 同じ email が既にあれば 409。存在確認と INSERT を分けると競合するので、
+		// UNIQUE 制約違反をそのまま 409 にする。
+		Error("conflict")
+		// bcrypt の上限（72 バイト）を超えるパスワード。DSL の MaxLength は
+		// 文字数なので、ここだけは実装側で見る（Credentials のコメント参照）。
+		Error("password_too_long")
+
+		HTTP(func() {
+			POST("/users")
+			Response(StatusCreated)
+			Response("conflict", StatusConflict)
+			Response("password_too_long", StatusBadRequest)
+		})
+	})
+
+	Method("login", func() {
+		Description("Issue a JWT for the given credentials")
+		// 登録時の制約（8 文字以上など）はここでは掛けない。掛けると、後で制約を
+		// 厳しくしたときに既存ユーザがログインできなくなる。合っているかどうかは
+		// 実装が bcrypt で見るので、ここは「文字列が来ている」ことだけを確かめる。
+		Payload(func() {
+			Attribute("email", String, "メールアドレス（大文字小文字は区別しない）")
+			Attribute("password", String)
+			Required("email", "password")
+		})
+		Result(TokenResponse)
+		// email が無いのかパスワードが違うのかは区別せず、どちらも同じ 401 にする。
+		// 区別すると登録済みの email を外から列挙できてしまう。
+		Error("unauthorized")
+
+		HTTP(func() {
+			POST("/users/login")
+			Response(StatusOK)
+			Response("unauthorized", StatusUnauthorized)
+		})
+	})
+
+	Method("me", func() {
+		Description("Return the authenticated user")
+		Security(JWTAuth)
+		Payload(jwtToken)
+		Result(User)
+		Error("unauthorized")
+
+		HTTP(func() {
+			GET("/users/me")
+			Response(StatusOK)
+			Response("unauthorized", StatusUnauthorized)
+		})
+	})
+})
+
 // EntryRequest はクライアントが書き込めるフィールドだけを持つリクエスト型。
 // id / created_at / updated_at はサーバー側で付与する。
-// user_id も W3 で JWT から入れる予定のため、クライアントからは受け取らない。
+// user_id は JWT から引くので、クライアントからは受け取らない。
 // tags は現状では入れない
 var EntryRequest = Type("EntryRequest", func() {
 	Description("Client-writable fields of a journal entry")
@@ -65,7 +198,8 @@ var Journal = Type("Journal", func() {
 	Attribute("updated_at", String, func() {
 		Format(FormatDateTime)
 	})
-	// user_id は W3 のマルチユーザ化を見越して先に持たせておく（値は JWT 導入時に入る）
+	// user_id は作成時に JWT の sub から入れる（users.id）。
+	// users テーブルより前に作られた行は NULL のまま。
 	Attribute("user_id", Int64)
 })
 
@@ -73,9 +207,23 @@ var Journal = Type("Journal", func() {
 var _ = Service("entries", func() {
 	Description("Journal entries service")
 
+	// 全メソッドで JWT を要求する。誰の記録かをトークンから決めるため。
+	Security(JWTAuth)
+	// トークンが無い・壊れている・期限切れのときは 401。全メソッド共通なので
+	// サービスに置き、HTTP のマッピングも 1 箇所にまとめる。
+	Error("unauthorized")
+	HTTP(func() {
+		Response("unauthorized", StatusUnauthorized)
+	})
+
 	Method("create", func() {
 		Description("Create a new journal entry")
-		Payload(EntryRequest)
+		// EntryRequest + トークン。トークンは Authorization ヘッダに載るので、
+		// リクエストボディは EntryRequest のフィールドだけのまま。
+		Payload(func() {
+			Extend(EntryRequest)
+			jwtToken()
+		})
 		// Journal + location。location は Location ヘッダにマップされるため、
 		// レスポンスボディには Journal のフィールドだけが残る
 		Result(func() {
@@ -108,6 +256,7 @@ var _ = Service("entries", func() {
 				Minimum(0)
 				Default(0)
 			})
+			jwtToken()
 		})
 		Result(ArrayOf(Journal))
 
@@ -125,6 +274,7 @@ var _ = Service("entries", func() {
 		Payload(func() {
 			Attribute("id", Int64, "Entry ID")
 			Required("id")
+			jwtToken()
 		})
 		Result(Journal)
 		// idが存在しない場合は404を返す
@@ -143,6 +293,7 @@ var _ = Service("entries", func() {
 			Extend(EntryRequest)
 			Attribute("id", Int64, "Entry ID")
 			Required("id")
+			jwtToken()
 		})
 		Result(Journal)
 
@@ -160,6 +311,7 @@ var _ = Service("entries", func() {
 		Payload(func() {
 			Attribute("id", Int64, "Entry ID")
 			Required("id")
+			jwtToken()
 		})
 
 		// idが存在しない場合は404を返す

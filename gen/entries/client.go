@@ -34,7 +34,10 @@ func NewClient(create, list, get, update, delete_ goa.Endpoint) *Client {
 }
 
 // Create calls the "create" endpoint of the "entries" service.
-func (c *Client) Create(ctx context.Context, p *EntryRequest) (res *CreateResult, err error) {
+// Create may return the following errors:
+//   - "unauthorized" (type *goa.ServiceError)
+//   - error: internal error
+func (c *Client) Create(ctx context.Context, p *CreatePayload) (res *CreateResult, err error) {
 	var ires any
 	ires, err = c.CreateEndpoint(ctx, p)
 	if err != nil {
@@ -44,6 +47,9 @@ func (c *Client) Create(ctx context.Context, p *EntryRequest) (res *CreateResult
 }
 
 // List calls the "list" endpoint of the "entries" service.
+// List may return the following errors:
+//   - "unauthorized" (type *goa.ServiceError)
+//   - error: internal error
 func (c *Client) List(ctx context.Context, p *ListPayload) (res []*Journal, err error) {
 	var ires any
 	ires, err = c.ListEndpoint(ctx, p)
@@ -56,6 +62,7 @@ func (c *Client) List(ctx context.Context, p *ListPayload) (res []*Journal, err 
 // Get calls the "get" endpoint of the "entries" service.
 // Get may return the following errors:
 //   - "not_found" (type *goa.ServiceError)
+//   - "unauthorized" (type *goa.ServiceError)
 //   - error: internal error
 func (c *Client) Get(ctx context.Context, p *GetPayload) (res *Journal, err error) {
 	var ires any
@@ -69,6 +76,7 @@ func (c *Client) Get(ctx context.Context, p *GetPayload) (res *Journal, err erro
 // Update calls the "update" endpoint of the "entries" service.
 // Update may return the following errors:
 //   - "not_found" (type *goa.ServiceError)
+//   - "unauthorized" (type *goa.ServiceError)
 //   - error: internal error
 func (c *Client) Update(ctx context.Context, p *UpdatePayload) (res *Journal, err error) {
 	var ires any
@@ -82,6 +90,7 @@ func (c *Client) Update(ctx context.Context, p *UpdatePayload) (res *Journal, er
 // Delete calls the "delete" endpoint of the "entries" service.
 // Delete may return the following errors:
 //   - "not_found" (type *goa.ServiceError)
+//   - "unauthorized" (type *goa.ServiceError)
 //   - error: internal error
 func (c *Client) Delete(ctx context.Context, p *DeletePayload) (err error) {
 	_, err = c.DeleteEndpoint(ctx, p)

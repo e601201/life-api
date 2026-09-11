@@ -15,6 +15,7 @@ import (
 	"github.com/e601201/life-api/db"
 	entries "github.com/e601201/life-api/gen/entries"
 	health "github.com/e601201/life-api/gen/health"
+	users "github.com/e601201/life-api/gen/users"
 	"goa.design/clue/debug"
 	"goa.design/clue/log"
 )
@@ -59,26 +60,41 @@ func main() {
 	defer pool.Close()
 	log.Print(ctx, log.KV{K: "msg", V: "database connected"})
 
+	// JWT の署名鍵。DATABASE_URL と違ってフラグにはしない。コマンドラインに載せると
+	// ps やシェルの履歴に残るため、環境変数だけで受け取る。ローカルは .env（compose）
+	// か export、ECS では SSM から secrets として注入する（terraform/ssm.tf）。
+	auth, err := life.NewAuth(os.Getenv("JWT_SECRET"))
+	if err != nil {
+		log.Fatalf(ctx, err, "invalid $JWT_SECRET")
+	}
+
 	// Initialize the services.
 	var (
 		healthSvc  health.Service
+		usersSvc   users.Service
 		entriesSvc entries.Service
 	)
 	{
 		healthSvc = life.NewHealth(pool)
-		entriesSvc = life.NewEntries(pool)
+		usersSvc = life.NewUsers(pool, auth)
+		entriesSvc = life.NewEntries(pool, auth)
 	}
 
 	// Wrap the services in endpoints that can be invoked from other services
 	// potentially running in different processes.
 	var (
 		healthEndpoints  *health.Endpoints
+		usersEndpoints   *users.Endpoints
 		entriesEndpoints *entries.Endpoints
 	)
 	{
 		healthEndpoints = health.NewEndpoints(healthSvc)
 		healthEndpoints.Use(debug.LogPayloads())
 		healthEndpoints.Use(log.Endpoint)
+		// debug.LogPayloads は -debug のときにペイロードを丸ごとログに出す。
+		// users には password が入るので、この層は付けない。
+		usersEndpoints = users.NewEndpoints(usersSvc)
+		usersEndpoints.Use(log.Endpoint)
 		entriesEndpoints = entries.NewEndpoints(entriesSvc)
 		entriesEndpoints.Use(debug.LogPayloads())
 		entriesEndpoints.Use(log.Endpoint)
@@ -123,7 +139,7 @@ func main() {
 			} else if u.Port() == "" {
 				u.Host = net.JoinHostPort(u.Host, "80")
 			}
-			handleHTTPServer(ctx, u, healthEndpoints, entriesEndpoints, &wg, errc, *dbgF)
+			handleHTTPServer(ctx, u, healthEndpoints, usersEndpoints, entriesEndpoints, &wg, errc, *dbgF)
 		}
 
 	case "container":
@@ -148,7 +164,7 @@ func main() {
 			} else if u.Port() == "" {
 				u.Host = net.JoinHostPort(u.Host, "80")
 			}
-			handleHTTPServer(ctx, u, healthEndpoints, entriesEndpoints, &wg, errc, *dbgF)
+			handleHTTPServer(ctx, u, healthEndpoints, usersEndpoints, entriesEndpoints, &wg, errc, *dbgF)
 		}
 
 	default:

@@ -19,7 +19,7 @@ import (
 
 // BuildCreatePayload builds the payload for the entries create endpoint from
 // CLI flags.
-func BuildCreatePayload(entriesCreateBody string) (*entries.EntryRequest, error) {
+func BuildCreatePayload(entriesCreateBody string, entriesCreateToken string) (*entries.CreatePayload, error) {
 	var err error
 	var body CreateRequestBody
 	{
@@ -38,19 +38,26 @@ func BuildCreatePayload(entriesCreateBody string) (*entries.EntryRequest, error)
 			return nil, err
 		}
 	}
-	v := &entries.EntryRequest{
+	var token *string
+	{
+		if entriesCreateToken != "" {
+			token = &entriesCreateToken
+		}
+	}
+	v := &entries.CreatePayload{
 		EntryDate: body.EntryDate,
 		Kind:      body.Kind,
 		Title:     body.Title,
 		Body:      body.Body,
 	}
+	v.Token = token
 
 	return v, nil
 }
 
 // BuildListPayload builds the payload for the entries list endpoint from CLI
 // flags.
-func BuildListPayload(entriesListLimit string, entriesListOffset string) (*entries.ListPayload, error) {
+func BuildListPayload(entriesListLimit string, entriesListOffset string, entriesListToken string) (*entries.ListPayload, error) {
 	var err error
 	var limit int
 	{
@@ -89,16 +96,23 @@ func BuildListPayload(entriesListLimit string, entriesListOffset string) (*entri
 			}
 		}
 	}
+	var token *string
+	{
+		if entriesListToken != "" {
+			token = &entriesListToken
+		}
+	}
 	v := &entries.ListPayload{}
 	v.Limit = limit
 	v.Offset = offset
+	v.Token = token
 
 	return v, nil
 }
 
 // BuildGetPayload builds the payload for the entries get endpoint from CLI
 // flags.
-func BuildGetPayload(entriesGetID string) (*entries.GetPayload, error) {
+func BuildGetPayload(entriesGetID string, entriesGetToken string) (*entries.GetPayload, error) {
 	var err error
 	var id int64
 	{
@@ -107,15 +121,22 @@ func BuildGetPayload(entriesGetID string) (*entries.GetPayload, error) {
 			return nil, fmt.Errorf("invalid value for id, must be INT64")
 		}
 	}
+	var token *string
+	{
+		if entriesGetToken != "" {
+			token = &entriesGetToken
+		}
+	}
 	v := &entries.GetPayload{}
 	v.ID = id
+	v.Token = token
 
 	return v, nil
 }
 
 // BuildUpdatePayload builds the payload for the entries update endpoint from
 // CLI flags.
-func BuildUpdatePayload(entriesUpdateBody string, entriesUpdateID string) (*entries.UpdatePayload, error) {
+func BuildUpdatePayload(entriesUpdateBody string, entriesUpdateID string, entriesUpdateToken string) (*entries.UpdatePayload, error) {
 	var err error
 	var body UpdateRequestBody
 	{
@@ -141,6 +162,12 @@ func BuildUpdatePayload(entriesUpdateBody string, entriesUpdateID string) (*entr
 			return nil, fmt.Errorf("invalid value for id, must be INT64")
 		}
 	}
+	var token *string
+	{
+		if entriesUpdateToken != "" {
+			token = &entriesUpdateToken
+		}
+	}
 	v := &entries.UpdatePayload{
 		EntryDate: body.EntryDate,
 		Kind:      body.Kind,
@@ -148,13 +175,14 @@ func BuildUpdatePayload(entriesUpdateBody string, entriesUpdateID string) (*entr
 		Body:      body.Body,
 	}
 	v.ID = id
+	v.Token = token
 
 	return v, nil
 }
 
 // BuildDeletePayload builds the payload for the entries delete endpoint from
 // CLI flags.
-func BuildDeletePayload(entriesDeleteID string) (*entries.DeletePayload, error) {
+func BuildDeletePayload(entriesDeleteID string, entriesDeleteToken string) (*entries.DeletePayload, error) {
 	var err error
 	var id int64
 	{
@@ -163,8 +191,15 @@ func BuildDeletePayload(entriesDeleteID string) (*entries.DeletePayload, error) 
 			return nil, fmt.Errorf("invalid value for id, must be INT64")
 		}
 	}
+	var token *string
+	{
+		if entriesDeleteToken != "" {
+			token = &entriesDeleteToken
+		}
+	}
 	v := &entries.DeletePayload{}
 	v.ID = id
+	v.Token = token
 
 	return v, nil
 }

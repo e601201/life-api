@@ -11,6 +11,7 @@ import (
 	"context"
 
 	goa "goa.design/goa/v3/pkg"
+	"goa.design/goa/v3/security"
 )
 
 // Endpoints wraps the "entries" service endpoints.
@@ -24,12 +25,14 @@ type Endpoints struct {
 
 // NewEndpoints wraps the methods of the "entries" service with endpoints.
 func NewEndpoints(s Service) *Endpoints {
+	// Casting service to Auther interface
+	a := s.(Auther)
 	return &Endpoints{
-		Create: NewCreateEndpoint(s),
-		List:   NewListEndpoint(s),
-		Get:    NewGetEndpoint(s),
-		Update: NewUpdateEndpoint(s),
-		Delete: NewDeleteEndpoint(s),
+		Create: NewCreateEndpoint(s, a.JWTAuth),
+		List:   NewListEndpoint(s, a.JWTAuth),
+		Get:    NewGetEndpoint(s, a.JWTAuth),
+		Update: NewUpdateEndpoint(s, a.JWTAuth),
+		Delete: NewDeleteEndpoint(s, a.JWTAuth),
 	}
 }
 
@@ -44,45 +47,115 @@ func (e *Endpoints) Use(m func(goa.Endpoint) goa.Endpoint) {
 
 // NewCreateEndpoint returns an endpoint function that calls the method
 // "create" of service "entries".
-func NewCreateEndpoint(s Service) goa.Endpoint {
+func NewCreateEndpoint(s Service, authJWTFn security.AuthJWTFunc) goa.Endpoint {
 	return func(ctx context.Context, req any) (any, error) {
-		p := req.(*EntryRequest)
+		p := req.(*CreatePayload)
+		var err error
+		sc := security.JWTScheme{
+			Name:           "jwt",
+			Scopes:         []string{},
+			RequiredScopes: []string{},
+		}
+		var token string
+		if p.Token != nil {
+			token = *p.Token
+		}
+		ctx, err = authJWTFn(ctx, token, &sc)
+		if err != nil {
+			return nil, err
+		}
 		return s.Create(ctx, p)
 	}
 }
 
 // NewListEndpoint returns an endpoint function that calls the method "list" of
 // service "entries".
-func NewListEndpoint(s Service) goa.Endpoint {
+func NewListEndpoint(s Service, authJWTFn security.AuthJWTFunc) goa.Endpoint {
 	return func(ctx context.Context, req any) (any, error) {
 		p := req.(*ListPayload)
+		var err error
+		sc := security.JWTScheme{
+			Name:           "jwt",
+			Scopes:         []string{},
+			RequiredScopes: []string{},
+		}
+		var token string
+		if p.Token != nil {
+			token = *p.Token
+		}
+		ctx, err = authJWTFn(ctx, token, &sc)
+		if err != nil {
+			return nil, err
+		}
 		return s.List(ctx, p)
 	}
 }
 
 // NewGetEndpoint returns an endpoint function that calls the method "get" of
 // service "entries".
-func NewGetEndpoint(s Service) goa.Endpoint {
+func NewGetEndpoint(s Service, authJWTFn security.AuthJWTFunc) goa.Endpoint {
 	return func(ctx context.Context, req any) (any, error) {
 		p := req.(*GetPayload)
+		var err error
+		sc := security.JWTScheme{
+			Name:           "jwt",
+			Scopes:         []string{},
+			RequiredScopes: []string{},
+		}
+		var token string
+		if p.Token != nil {
+			token = *p.Token
+		}
+		ctx, err = authJWTFn(ctx, token, &sc)
+		if err != nil {
+			return nil, err
+		}
 		return s.Get(ctx, p)
 	}
 }
 
 // NewUpdateEndpoint returns an endpoint function that calls the method
 // "update" of service "entries".
-func NewUpdateEndpoint(s Service) goa.Endpoint {
+func NewUpdateEndpoint(s Service, authJWTFn security.AuthJWTFunc) goa.Endpoint {
 	return func(ctx context.Context, req any) (any, error) {
 		p := req.(*UpdatePayload)
+		var err error
+		sc := security.JWTScheme{
+			Name:           "jwt",
+			Scopes:         []string{},
+			RequiredScopes: []string{},
+		}
+		var token string
+		if p.Token != nil {
+			token = *p.Token
+		}
+		ctx, err = authJWTFn(ctx, token, &sc)
+		if err != nil {
+			return nil, err
+		}
 		return s.Update(ctx, p)
 	}
 }
 
 // NewDeleteEndpoint returns an endpoint function that calls the method
 // "delete" of service "entries".
-func NewDeleteEndpoint(s Service) goa.Endpoint {
+func NewDeleteEndpoint(s Service, authJWTFn security.AuthJWTFunc) goa.Endpoint {
 	return func(ctx context.Context, req any) (any, error) {
 		p := req.(*DeletePayload)
+		var err error
+		sc := security.JWTScheme{
+			Name:           "jwt",
+			Scopes:         []string{},
+			RequiredScopes: []string{},
+		}
+		var token string
+		if p.Token != nil {
+			token = *p.Token
+		}
+		ctx, err = authJWTFn(ctx, token, &sc)
+		if err != nil {
+			return nil, err
+		}
 		return nil, s.Delete(ctx, p)
 	}
 }

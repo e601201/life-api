@@ -25,7 +25,13 @@ services:
     command: ["--host", "container"]
     ports:
       - "8080:8080"
-    environment: *database-url
+    environment:
+      <<: *database-url
+      # JWT の署名鍵。リポジトリには置かないので既定値は用意しない（.env.example 参照）。
+      # 未設定のまま上げると api は起動直後に "invalid $JWT_SECRET" で落ちる。
+      # ここで :? を使って止めると `docker compose up -d db` のような DB だけの起動まで
+      # 巻き込まれる（compose は使わないサービスの変数も展開する）ので、空を許している。
+      JWT_SECRET: ${JWT_SECRET:-}
     depends_on:
       migrate:
         # マイグレーションが正常終了してから api を起動する。api 自身は

@@ -80,9 +80,63 @@ type UpdateResponseBody struct {
 	Body      *string `form:"body,omitempty" json:"body,omitempty" xml:"body,omitempty"`
 }
 
+// CreateUnauthorizedResponseBody is the type of the "entries" service "create"
+// endpoint HTTP response body for the "unauthorized" error.
+type CreateUnauthorizedResponseBody struct {
+	// Name is the name of this class of errors.
+	Name string `form:"name" json:"name" xml:"name"`
+	// ID is a unique identifier for this particular occurrence of the problem.
+	ID string `form:"id" json:"id" xml:"id"`
+	// Message is a human-readable explanation specific to this occurrence of the
+	// problem.
+	Message string `form:"message" json:"message" xml:"message"`
+	// Is the error temporary?
+	Temporary bool `form:"temporary" json:"temporary" xml:"temporary"`
+	// Is the error a timeout?
+	Timeout bool `form:"timeout" json:"timeout" xml:"timeout"`
+	// Is the error a server-side fault?
+	Fault bool `form:"fault" json:"fault" xml:"fault"`
+}
+
+// ListUnauthorizedResponseBody is the type of the "entries" service "list"
+// endpoint HTTP response body for the "unauthorized" error.
+type ListUnauthorizedResponseBody struct {
+	// Name is the name of this class of errors.
+	Name string `form:"name" json:"name" xml:"name"`
+	// ID is a unique identifier for this particular occurrence of the problem.
+	ID string `form:"id" json:"id" xml:"id"`
+	// Message is a human-readable explanation specific to this occurrence of the
+	// problem.
+	Message string `form:"message" json:"message" xml:"message"`
+	// Is the error temporary?
+	Temporary bool `form:"temporary" json:"temporary" xml:"temporary"`
+	// Is the error a timeout?
+	Timeout bool `form:"timeout" json:"timeout" xml:"timeout"`
+	// Is the error a server-side fault?
+	Fault bool `form:"fault" json:"fault" xml:"fault"`
+}
+
 // GetNotFoundResponseBody is the type of the "entries" service "get" endpoint
 // HTTP response body for the "not_found" error.
 type GetNotFoundResponseBody struct {
+	// Name is the name of this class of errors.
+	Name string `form:"name" json:"name" xml:"name"`
+	// ID is a unique identifier for this particular occurrence of the problem.
+	ID string `form:"id" json:"id" xml:"id"`
+	// Message is a human-readable explanation specific to this occurrence of the
+	// problem.
+	Message string `form:"message" json:"message" xml:"message"`
+	// Is the error temporary?
+	Temporary bool `form:"temporary" json:"temporary" xml:"temporary"`
+	// Is the error a timeout?
+	Timeout bool `form:"timeout" json:"timeout" xml:"timeout"`
+	// Is the error a server-side fault?
+	Fault bool `form:"fault" json:"fault" xml:"fault"`
+}
+
+// GetUnauthorizedResponseBody is the type of the "entries" service "get"
+// endpoint HTTP response body for the "unauthorized" error.
+type GetUnauthorizedResponseBody struct {
 	// Name is the name of this class of errors.
 	Name string `form:"name" json:"name" xml:"name"`
 	// ID is a unique identifier for this particular occurrence of the problem.
@@ -116,9 +170,45 @@ type UpdateNotFoundResponseBody struct {
 	Fault bool `form:"fault" json:"fault" xml:"fault"`
 }
 
+// UpdateUnauthorizedResponseBody is the type of the "entries" service "update"
+// endpoint HTTP response body for the "unauthorized" error.
+type UpdateUnauthorizedResponseBody struct {
+	// Name is the name of this class of errors.
+	Name string `form:"name" json:"name" xml:"name"`
+	// ID is a unique identifier for this particular occurrence of the problem.
+	ID string `form:"id" json:"id" xml:"id"`
+	// Message is a human-readable explanation specific to this occurrence of the
+	// problem.
+	Message string `form:"message" json:"message" xml:"message"`
+	// Is the error temporary?
+	Temporary bool `form:"temporary" json:"temporary" xml:"temporary"`
+	// Is the error a timeout?
+	Timeout bool `form:"timeout" json:"timeout" xml:"timeout"`
+	// Is the error a server-side fault?
+	Fault bool `form:"fault" json:"fault" xml:"fault"`
+}
+
 // DeleteNotFoundResponseBody is the type of the "entries" service "delete"
 // endpoint HTTP response body for the "not_found" error.
 type DeleteNotFoundResponseBody struct {
+	// Name is the name of this class of errors.
+	Name string `form:"name" json:"name" xml:"name"`
+	// ID is a unique identifier for this particular occurrence of the problem.
+	ID string `form:"id" json:"id" xml:"id"`
+	// Message is a human-readable explanation specific to this occurrence of the
+	// problem.
+	Message string `form:"message" json:"message" xml:"message"`
+	// Is the error temporary?
+	Temporary bool `form:"temporary" json:"temporary" xml:"temporary"`
+	// Is the error a timeout?
+	Timeout bool `form:"timeout" json:"timeout" xml:"timeout"`
+	// Is the error a server-side fault?
+	Fault bool `form:"fault" json:"fault" xml:"fault"`
+}
+
+// DeleteUnauthorizedResponseBody is the type of the "entries" service "delete"
+// endpoint HTTP response body for the "unauthorized" error.
+type DeleteUnauthorizedResponseBody struct {
 	// Name is the name of this class of errors.
 	Name string `form:"name" json:"name" xml:"name"`
 	// ID is a unique identifier for this particular occurrence of the problem.
@@ -209,10 +299,52 @@ func NewUpdateResponseBody(res *entries.Journal) *UpdateResponseBody {
 	return body
 }
 
+// NewCreateUnauthorizedResponseBody builds the HTTP response body from the
+// result of the "create" endpoint of the "entries" service.
+func NewCreateUnauthorizedResponseBody(res *goa.ServiceError) *CreateUnauthorizedResponseBody {
+	body := &CreateUnauthorizedResponseBody{
+		Name:      res.Name,
+		ID:        res.ID,
+		Message:   res.Message,
+		Temporary: res.Temporary,
+		Timeout:   res.Timeout,
+		Fault:     res.Fault,
+	}
+	return body
+}
+
+// NewListUnauthorizedResponseBody builds the HTTP response body from the
+// result of the "list" endpoint of the "entries" service.
+func NewListUnauthorizedResponseBody(res *goa.ServiceError) *ListUnauthorizedResponseBody {
+	body := &ListUnauthorizedResponseBody{
+		Name:      res.Name,
+		ID:        res.ID,
+		Message:   res.Message,
+		Temporary: res.Temporary,
+		Timeout:   res.Timeout,
+		Fault:     res.Fault,
+	}
+	return body
+}
+
 // NewGetNotFoundResponseBody builds the HTTP response body from the result of
 // the "get" endpoint of the "entries" service.
 func NewGetNotFoundResponseBody(res *goa.ServiceError) *GetNotFoundResponseBody {
 	body := &GetNotFoundResponseBody{
+		Name:      res.Name,
+		ID:        res.ID,
+		Message:   res.Message,
+		Temporary: res.Temporary,
+		Timeout:   res.Timeout,
+		Fault:     res.Fault,
+	}
+	return body
+}
+
+// NewGetUnauthorizedResponseBody builds the HTTP response body from the result
+// of the "get" endpoint of the "entries" service.
+func NewGetUnauthorizedResponseBody(res *goa.ServiceError) *GetUnauthorizedResponseBody {
+	body := &GetUnauthorizedResponseBody{
 		Name:      res.Name,
 		ID:        res.ID,
 		Message:   res.Message,
@@ -237,6 +369,20 @@ func NewUpdateNotFoundResponseBody(res *goa.ServiceError) *UpdateNotFoundRespons
 	return body
 }
 
+// NewUpdateUnauthorizedResponseBody builds the HTTP response body from the
+// result of the "update" endpoint of the "entries" service.
+func NewUpdateUnauthorizedResponseBody(res *goa.ServiceError) *UpdateUnauthorizedResponseBody {
+	body := &UpdateUnauthorizedResponseBody{
+		Name:      res.Name,
+		ID:        res.ID,
+		Message:   res.Message,
+		Temporary: res.Temporary,
+		Timeout:   res.Timeout,
+		Fault:     res.Fault,
+	}
+	return body
+}
+
 // NewDeleteNotFoundResponseBody builds the HTTP response body from the result
 // of the "delete" endpoint of the "entries" service.
 func NewDeleteNotFoundResponseBody(res *goa.ServiceError) *DeleteNotFoundResponseBody {
@@ -251,37 +397,54 @@ func NewDeleteNotFoundResponseBody(res *goa.ServiceError) *DeleteNotFoundRespons
 	return body
 }
 
-// NewCreateEntryRequest builds a entries service create endpoint payload.
-func NewCreateEntryRequest(body *CreateRequestBody) *entries.EntryRequest {
-	v := &entries.EntryRequest{
+// NewDeleteUnauthorizedResponseBody builds the HTTP response body from the
+// result of the "delete" endpoint of the "entries" service.
+func NewDeleteUnauthorizedResponseBody(res *goa.ServiceError) *DeleteUnauthorizedResponseBody {
+	body := &DeleteUnauthorizedResponseBody{
+		Name:      res.Name,
+		ID:        res.ID,
+		Message:   res.Message,
+		Temporary: res.Temporary,
+		Timeout:   res.Timeout,
+		Fault:     res.Fault,
+	}
+	return body
+}
+
+// NewCreatePayload builds a entries service create endpoint payload.
+func NewCreatePayload(body *CreateRequestBody, token *string) *entries.CreatePayload {
+	v := &entries.CreatePayload{
 		EntryDate: *body.EntryDate,
 		Kind:      *body.Kind,
 		Title:     *body.Title,
 		Body:      body.Body,
 	}
+	v.Token = token
 
 	return v
 }
 
 // NewListPayload builds a entries service list endpoint payload.
-func NewListPayload(limit int, offset int) *entries.ListPayload {
+func NewListPayload(limit int, offset int, token *string) *entries.ListPayload {
 	v := &entries.ListPayload{}
 	v.Limit = limit
 	v.Offset = offset
+	v.Token = token
 
 	return v
 }
 
 // NewGetPayload builds a entries service get endpoint payload.
-func NewGetPayload(id int64) *entries.GetPayload {
+func NewGetPayload(id int64, token *string) *entries.GetPayload {
 	v := &entries.GetPayload{}
 	v.ID = id
+	v.Token = token
 
 	return v
 }
 
 // NewUpdatePayload builds a entries service update endpoint payload.
-func NewUpdatePayload(body *UpdateRequestBody, id int64) *entries.UpdatePayload {
+func NewUpdatePayload(body *UpdateRequestBody, id int64, token *string) *entries.UpdatePayload {
 	v := &entries.UpdatePayload{
 		EntryDate: *body.EntryDate,
 		Kind:      *body.Kind,
@@ -289,14 +452,16 @@ func NewUpdatePayload(body *UpdateRequestBody, id int64) *entries.UpdatePayload 
 		Body:      body.Body,
 	}
 	v.ID = id
+	v.Token = token
 
 	return v
 }
 
 // NewDeletePayload builds a entries service delete endpoint payload.
-func NewDeletePayload(id int64) *entries.DeletePayload {
+func NewDeletePayload(id int64, token *string) *entries.DeletePayload {
 	v := &entries.DeletePayload{}
 	v.ID = id
+	v.Token = token
 
 	return v
 }

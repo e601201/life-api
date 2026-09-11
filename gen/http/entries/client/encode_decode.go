@@ -14,6 +14,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 
 	entries "github.com/e601201/life-api/gen/entries"
 	goahttp "goa.design/goa/v3/http"
@@ -39,9 +40,17 @@ func (c *Client) BuildCreateRequest(ctx context.Context, v any) (*http.Request, 
 // create server.
 func EncodeCreateRequest(encoder func(*http.Request) goahttp.Encoder) func(*http.Request, any) error {
 	return func(req *http.Request, v any) error {
-		p, ok := v.(*entries.EntryRequest)
+		p, ok := v.(*entries.CreatePayload)
 		if !ok {
-			return goahttp.ErrInvalidType("entries", "create", "*entries.EntryRequest", v)
+			return goahttp.ErrInvalidType("entries", "create", "*entries.CreatePayload", v)
+		}
+		if p.Token != nil {
+			head := *p.Token
+			if !strings.Contains(head, " ") {
+				req.Header.Set("Authorization", "Bearer "+head)
+			} else {
+				req.Header.Set("Authorization", head)
+			}
 		}
 		body := NewCreateRequestBody(p)
 		if err := encoder(req).Encode(&body); err != nil {
@@ -54,6 +63,9 @@ func EncodeCreateRequest(encoder func(*http.Request) goahttp.Encoder) func(*http
 // DecodeCreateResponse returns a decoder for responses returned by the entries
 // create endpoint. restoreBody controls whether the response body should be
 // restored after having been read.
+// DecodeCreateResponse may return the following errors:
+//   - "unauthorized" (type *goa.ServiceError): http.StatusUnauthorized
+//   - error: internal error
 func DecodeCreateResponse(decoder func(*http.Response) goahttp.Decoder, restoreBody bool) func(*http.Response) (any, error) {
 	return func(resp *http.Response) (any, error) {
 		if restoreBody {
@@ -95,6 +107,20 @@ func DecodeCreateResponse(decoder func(*http.Response) goahttp.Decoder, restoreB
 			}
 			res := NewCreateResultCreated(&body, location)
 			return res, nil
+		case http.StatusUnauthorized:
+			var (
+				body CreateUnauthorizedResponseBody
+				err  error
+			)
+			err = decoder(resp).Decode(&body)
+			if err != nil {
+				return nil, goahttp.ErrDecodingError("entries", "create", err)
+			}
+			err = ValidateCreateUnauthorizedResponseBody(&body)
+			if err != nil {
+				return nil, goahttp.ErrValidationError("entries", "create", err)
+			}
+			return nil, NewCreateUnauthorized(&body)
 		default:
 			body, _ := io.ReadAll(resp.Body)
 			return nil, goahttp.ErrInvalidResponse("entries", "create", resp.StatusCode, string(body))
@@ -125,6 +151,14 @@ func EncodeListRequest(encoder func(*http.Request) goahttp.Encoder) func(*http.R
 		if !ok {
 			return goahttp.ErrInvalidType("entries", "list", "*entries.ListPayload", v)
 		}
+		if p.Token != nil {
+			head := *p.Token
+			if !strings.Contains(head, " ") {
+				req.Header.Set("Authorization", "Bearer "+head)
+			} else {
+				req.Header.Set("Authorization", head)
+			}
+		}
 		values := req.URL.Query()
 		values.Add("limit", fmt.Sprintf("%v", p.Limit))
 		values.Add("offset", fmt.Sprintf("%v", p.Offset))
@@ -136,6 +170,9 @@ func EncodeListRequest(encoder func(*http.Request) goahttp.Encoder) func(*http.R
 // DecodeListResponse returns a decoder for responses returned by the entries
 // list endpoint. restoreBody controls whether the response body should be
 // restored after having been read.
+// DecodeListResponse may return the following errors:
+//   - "unauthorized" (type *goa.ServiceError): http.StatusUnauthorized
+//   - error: internal error
 func DecodeListResponse(decoder func(*http.Response) goahttp.Decoder, restoreBody bool) func(*http.Response) (any, error) {
 	return func(resp *http.Response) (any, error) {
 		if restoreBody {
@@ -172,6 +209,20 @@ func DecodeListResponse(decoder func(*http.Response) goahttp.Decoder, restoreBod
 			}
 			res := NewListJournalOK(body)
 			return res, nil
+		case http.StatusUnauthorized:
+			var (
+				body ListUnauthorizedResponseBody
+				err  error
+			)
+			err = decoder(resp).Decode(&body)
+			if err != nil {
+				return nil, goahttp.ErrDecodingError("entries", "list", err)
+			}
+			err = ValidateListUnauthorizedResponseBody(&body)
+			if err != nil {
+				return nil, goahttp.ErrValidationError("entries", "list", err)
+			}
+			return nil, NewListUnauthorized(&body)
 		default:
 			body, _ := io.ReadAll(resp.Body)
 			return nil, goahttp.ErrInvalidResponse("entries", "list", resp.StatusCode, string(body))
@@ -204,11 +255,32 @@ func (c *Client) BuildGetRequest(ctx context.Context, v any) (*http.Request, err
 	return req, nil
 }
 
+// EncodeGetRequest returns an encoder for requests sent to the entries get
+// server.
+func EncodeGetRequest(encoder func(*http.Request) goahttp.Encoder) func(*http.Request, any) error {
+	return func(req *http.Request, v any) error {
+		p, ok := v.(*entries.GetPayload)
+		if !ok {
+			return goahttp.ErrInvalidType("entries", "get", "*entries.GetPayload", v)
+		}
+		if p.Token != nil {
+			head := *p.Token
+			if !strings.Contains(head, " ") {
+				req.Header.Set("Authorization", "Bearer "+head)
+			} else {
+				req.Header.Set("Authorization", head)
+			}
+		}
+		return nil
+	}
+}
+
 // DecodeGetResponse returns a decoder for responses returned by the entries
 // get endpoint. restoreBody controls whether the response body should be
 // restored after having been read.
 // DecodeGetResponse may return the following errors:
 //   - "not_found" (type *goa.ServiceError): http.StatusNotFound
+//   - "unauthorized" (type *goa.ServiceError): http.StatusUnauthorized
 //   - error: internal error
 func DecodeGetResponse(decoder func(*http.Response) goahttp.Decoder, restoreBody bool) func(*http.Response) (any, error) {
 	return func(resp *http.Response) (any, error) {
@@ -254,6 +326,20 @@ func DecodeGetResponse(decoder func(*http.Response) goahttp.Decoder, restoreBody
 				return nil, goahttp.ErrValidationError("entries", "get", err)
 			}
 			return nil, NewGetNotFound(&body)
+		case http.StatusUnauthorized:
+			var (
+				body GetUnauthorizedResponseBody
+				err  error
+			)
+			err = decoder(resp).Decode(&body)
+			if err != nil {
+				return nil, goahttp.ErrDecodingError("entries", "get", err)
+			}
+			err = ValidateGetUnauthorizedResponseBody(&body)
+			if err != nil {
+				return nil, goahttp.ErrValidationError("entries", "get", err)
+			}
+			return nil, NewGetUnauthorized(&body)
 		default:
 			body, _ := io.ReadAll(resp.Body)
 			return nil, goahttp.ErrInvalidResponse("entries", "get", resp.StatusCode, string(body))
@@ -294,6 +380,14 @@ func EncodeUpdateRequest(encoder func(*http.Request) goahttp.Encoder) func(*http
 		if !ok {
 			return goahttp.ErrInvalidType("entries", "update", "*entries.UpdatePayload", v)
 		}
+		if p.Token != nil {
+			head := *p.Token
+			if !strings.Contains(head, " ") {
+				req.Header.Set("Authorization", "Bearer "+head)
+			} else {
+				req.Header.Set("Authorization", head)
+			}
+		}
 		body := NewUpdateRequestBody(p)
 		if err := encoder(req).Encode(&body); err != nil {
 			return goahttp.ErrEncodingError("entries", "update", err)
@@ -307,6 +401,7 @@ func EncodeUpdateRequest(encoder func(*http.Request) goahttp.Encoder) func(*http
 // restored after having been read.
 // DecodeUpdateResponse may return the following errors:
 //   - "not_found" (type *goa.ServiceError): http.StatusNotFound
+//   - "unauthorized" (type *goa.ServiceError): http.StatusUnauthorized
 //   - error: internal error
 func DecodeUpdateResponse(decoder func(*http.Response) goahttp.Decoder, restoreBody bool) func(*http.Response) (any, error) {
 	return func(resp *http.Response) (any, error) {
@@ -352,6 +447,20 @@ func DecodeUpdateResponse(decoder func(*http.Response) goahttp.Decoder, restoreB
 				return nil, goahttp.ErrValidationError("entries", "update", err)
 			}
 			return nil, NewUpdateNotFound(&body)
+		case http.StatusUnauthorized:
+			var (
+				body UpdateUnauthorizedResponseBody
+				err  error
+			)
+			err = decoder(resp).Decode(&body)
+			if err != nil {
+				return nil, goahttp.ErrDecodingError("entries", "update", err)
+			}
+			err = ValidateUpdateUnauthorizedResponseBody(&body)
+			if err != nil {
+				return nil, goahttp.ErrValidationError("entries", "update", err)
+			}
+			return nil, NewUpdateUnauthorized(&body)
 		default:
 			body, _ := io.ReadAll(resp.Body)
 			return nil, goahttp.ErrInvalidResponse("entries", "update", resp.StatusCode, string(body))
@@ -384,11 +493,32 @@ func (c *Client) BuildDeleteRequest(ctx context.Context, v any) (*http.Request, 
 	return req, nil
 }
 
+// EncodeDeleteRequest returns an encoder for requests sent to the entries
+// delete server.
+func EncodeDeleteRequest(encoder func(*http.Request) goahttp.Encoder) func(*http.Request, any) error {
+	return func(req *http.Request, v any) error {
+		p, ok := v.(*entries.DeletePayload)
+		if !ok {
+			return goahttp.ErrInvalidType("entries", "delete", "*entries.DeletePayload", v)
+		}
+		if p.Token != nil {
+			head := *p.Token
+			if !strings.Contains(head, " ") {
+				req.Header.Set("Authorization", "Bearer "+head)
+			} else {
+				req.Header.Set("Authorization", head)
+			}
+		}
+		return nil
+	}
+}
+
 // DecodeDeleteResponse returns a decoder for responses returned by the entries
 // delete endpoint. restoreBody controls whether the response body should be
 // restored after having been read.
 // DecodeDeleteResponse may return the following errors:
 //   - "not_found" (type *goa.ServiceError): http.StatusNotFound
+//   - "unauthorized" (type *goa.ServiceError): http.StatusUnauthorized
 //   - error: internal error
 func DecodeDeleteResponse(decoder func(*http.Response) goahttp.Decoder, restoreBody bool) func(*http.Response) (any, error) {
 	return func(resp *http.Response) (any, error) {
@@ -421,6 +551,20 @@ func DecodeDeleteResponse(decoder func(*http.Response) goahttp.Decoder, restoreB
 				return nil, goahttp.ErrValidationError("entries", "delete", err)
 			}
 			return nil, NewDeleteNotFound(&body)
+		case http.StatusUnauthorized:
+			var (
+				body DeleteUnauthorizedResponseBody
+				err  error
+			)
+			err = decoder(resp).Decode(&body)
+			if err != nil {
+				return nil, goahttp.ErrDecodingError("entries", "delete", err)
+			}
+			err = ValidateDeleteUnauthorizedResponseBody(&body)
+			if err != nil {
+				return nil, goahttp.ErrValidationError("entries", "delete", err)
+			}
+			return nil, NewDeleteUnauthorized(&body)
 		default:
 			body, _ := io.ReadAll(resp.Body)
 			return nil, goahttp.ErrInvalidResponse("entries", "delete", resp.StatusCode, string(body))

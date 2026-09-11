@@ -20,3 +20,23 @@ resource "aws_ssm_parameter" "database_url" {
     aws_db_instance.life[0].db_name,
   )
 }
+
+# JWT の署名鍵（HS256、api の環境変数 JWT_SECRET）。リポジトリにも tfvars にも置かず、
+# DB のパスワードと同じく Terraform が生成して state と SSM にだけ持つ。
+# RDS の有無（db_enabled）とは独立で、SSM Standard は無料なので常に作る。
+#
+# special=false でも 64 文字の英数字は 380 bit 相当で、HS256 が求める 256 bit を超える
+# （api 側は 32 バイト未満を起動時に拒否する）。
+# 値を変える（terraform taint / replace）と発行済みのトークンは全て無効になり、
+# 全員がログインし直しになる。
+resource "random_password" "jwt_secret" {
+  length  = 64
+  special = false
+}
+
+resource "aws_ssm_parameter" "jwt_secret" {
+  name        = local.jwt_secret_param_name
+  description = "life-api JWT_SECRET (managed by terraform)"
+  type        = "SecureString"
+  value       = random_password.jwt_secret.result
+}

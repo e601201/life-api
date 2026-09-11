@@ -26,4 +26,8 @@ locals {
   # タスク定義の secrets と、実行ロールの ssm:GetParameters の両方でこの名前を使う。
   database_url_param_name = "/life-api/database-url"
   database_url_param_arn  = "arn:aws:ssm:${var.aws_region}:${local.account_id}:parameter${local.database_url_param_name}"
+
+  # JWT の署名鍵。database-url と同じ /life-api/ 配下なので、実行ロールの
+  # ssm:GetParameters（parameter/life-api/*）はそのまま効く。
+  jwt_secret_param_name = "/life-api/jwt-secret"
 }
