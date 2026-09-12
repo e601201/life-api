@@ -99,8 +99,8 @@ db/migrations/000002_create_tags.down.sql
 ### テスト
 
 `entries` の CRUD と `users` は実際の PostgreSQL に対して流す。確かめたいものが SQL 側
-（`date` へのキャスト、`RETURNING`、`pgx.ErrNoRows`、UNIQUE 制約違反、インデックスに合わせた並び）に
-寄っているため、DB をモックすると肝心なところが残らない。`http_test.go` は Goa の生成コードごと
+（`date` へのキャスト、`RETURNING`、`pgx.ErrNoRows`、UNIQUE / NOT NULL 制約、`user_id` での絞り込み、
+インデックスに合わせた並び）に寄っているため、DB をモックすると肝心なところが残らない。`http_test.go` は Goa の生成コードごと
 `httptest` で立てて、Authorization ヘッダ → 401 / `user_id` の流れを HTTP で確かめる。
 JWT の発行・検証（`auth_test.go`）だけは DB を使わない。
 
@@ -127,8 +127,11 @@ JWT を受け取り、`Authorization: Bearer <token>` で渡す。トークン�
 - パスワードは bcrypt で保存する。8 文字以上、72 バイト以内（bcrypt の上限）
 - email は大文字小文字を区別しない（`lower(email)` の UNIQUE インデックス）。登録済みなら 409 `conflict`
 - ログイン失敗は「email が無い」「パスワードが違う」を区別せず、同じ 401 を返す（email の列挙を防ぐ）
-- `user_id` はリクエストでは受け取らず、作成時にトークンの `sub` から入れる。
-  `entries` を `user_id` で絞る（自分のデータだけ見える）のは次の #43
+- `user_id` はリクエストでは受け取らず、作成時にトークンの `sub` から入れる（DB では NOT NULL）
+- `entries` はすべて自分の記録だけが対象。一覧は自分の分だけ返し、id を指定する取得・更新・削除は
+  他人の id を「存在しない」と同じ 404 にする（403 で分けると、その id があることが外から分かる）
+- 000003 で `user_id` を NOT NULL にした。それより前に作られた `user_id` が NULL の行
+  （誰からも見えなくなる）は、このマイグレーションで消える
 
 DSL では `JWTSecurity("jwt")` を定義し、`entries` サービスと `users.me` に `Security(JWTAuth)` を
 付けている。Token 属性は `Required` にしていない。必須にするとヘッダ無しが Goa のデコード段階で
@@ -137,7 +140,7 @@ DSL では `JWTSecurity("jwt")` を定義し、`entries` サービスと `users.
 ### 打鍵確認（curl）
 
 entries の CRUD は `entries` テーブルへの読み書き（`entries.go`）。プロセスを再起動しても
-データは残る。一覧は記録日の新しい順（同じ日なら id の降順）で、**既定 10 件**を返す。
+データは残る。一覧は自分の記録を記録日の新しい順（同じ日なら id の降順）で、**既定 10 件**返す。
 件数と位置は `limit`（1〜100）と `offset` でずらす。
 
 `/health` はプロセスが生きているかに加えて DB への疎通も見る。繋がらないときは 503 を
@@ -187,7 +190,7 @@ curl -i -H 'Content-Type: application/json' localhost:8080/users/login \
 curl -i -H 'Content-Type: application/json' localhost:8080/users \
   -d '{"email":"ME@example.com","password":"another one"}'
 
-# 異常系: 存在しない id は 404 not_found
+# 異常系: 存在しない id と他人の id はどちらも 404 not_found
 curl -i -H "Authorization: Bearer $TOKEN" localhost:8080/entries/999
 
 # 異常系: バリデーション違反は 400

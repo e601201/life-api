@@ -11,7 +11,7 @@ paths:
             tags:
                 - entries
             summary: list entries
-            description: List journal entries
+            description: List the authenticated user's journal entries
             operationId: entries#list
             parameters:
                 - name: limit
@@ -126,7 +126,7 @@ paths:
             tags:
                 - entries
             summary: create entries
-            description: Create a new journal entry
+            description: Create a new journal entry owned by the authenticated user
             operationId: entries#create
             requestBody:
                 description: Request body for create.
@@ -177,7 +177,7 @@ paths:
             tags:
                 - entries
             summary: delete entries
-            description: Delete a journal entry by ID
+            description: Delete a journal entry by ID (entries of other users are not found)
             operationId: entries#delete
             parameters:
                 - name: id
@@ -211,7 +211,7 @@ paths:
             tags:
                 - entries
             summary: get entries
-            description: Get a journal entry by ID
+            description: Get a journal entry by ID (entries of other users are not found)
             operationId: entries#get
             parameters:
                 - name: id
@@ -258,7 +258,7 @@ paths:
             tags:
                 - entries
             summary: update entries
-            description: Update a journal entry by ID
+            description: Update a journal entry by ID (entries of other users are not found)
             operationId: entries#update
             parameters:
                 - name: id
@@ -710,7 +710,7 @@ components:
             bearerFormat: JWT
 tags:
     - name: entries
-      description: Journal entries service
+      description: Journal entries of the authenticated user
     - name: health
       description: health check this server
     - name: users

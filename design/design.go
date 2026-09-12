@@ -198,14 +198,17 @@ var Journal = Type("Journal", func() {
 	Attribute("updated_at", String, func() {
 		Format(FormatDateTime)
 	})
-	// user_id は作成時に JWT の sub から入れる（users.id）。
-	// users テーブルより前に作られた行は NULL のまま。
+	// user_id は作成時に JWT の sub から入れる（users.id）。DB では NOT NULL。
 	Attribute("user_id", Int64)
 })
 
 // Service entries: 5 メソッド(POST / GET list / GET one / PUT / DELETE)。
+//
+// どのメソッドも認証したユーザの記録だけを扱う。一覧は自分のものだけを返し、
+// id を指定する get / update / delete は他人の id を「存在しない」と同じ not_found にする
+// （403 にすると、その id が存在することが外から分かる）。
 var _ = Service("entries", func() {
-	Description("Journal entries service")
+	Description("Journal entries of the authenticated user")
 
 	// 全メソッドで JWT を要求する。誰の記録かをトークンから決めるため。
 	Security(JWTAuth)
@@ -217,7 +220,7 @@ var _ = Service("entries", func() {
 	})
 
 	Method("create", func() {
-		Description("Create a new journal entry")
+		Description("Create a new journal entry owned by the authenticated user")
 		// EntryRequest + トークン。トークンは Authorization ヘッダに載るので、
 		// リクエストボディは EntryRequest のフィールドだけのまま。
 		Payload(func() {
@@ -243,7 +246,7 @@ var _ = Service("entries", func() {
 	})
 
 	Method("list", func() {
-		Description("List journal entries")
+		Description("List the authenticated user's journal entries")
 		// 無条件に全件返すと、件数が増えるほど1リクエストが重くなる。
 		// 既定は 10 件で、クエリパラメータでずらして読む。
 		Payload(func() {
@@ -269,7 +272,7 @@ var _ = Service("entries", func() {
 	})
 
 	Method("get", func() {
-		Description("Get a journal entry by ID")
+		Description("Get a journal entry by ID (entries of other users are not found)")
 		// 無名の Payload(Int64) だと CLI のフラグが -p になるので、id と名前を付ける
 		Payload(func() {
 			Attribute("id", Int64, "Entry ID")
@@ -277,7 +280,7 @@ var _ = Service("entries", func() {
 			jwtToken()
 		})
 		Result(Journal)
-		// idが存在しない場合は404を返す
+		// id が存在しない、または他人のものなら 404
 		Error("not_found")
 		HTTP(func() {
 			GET("/entries/{id}")
@@ -287,7 +290,7 @@ var _ = Service("entries", func() {
 	})
 
 	Method("update", func() {
-		Description("Update a journal entry by ID")
+		Description("Update a journal entry by ID (entries of other users are not found)")
 		// EntryRequest + パスパラメータの id。id は必須なので実装側で nil チェックが要らない
 		Payload(func() {
 			Extend(EntryRequest)
@@ -297,7 +300,7 @@ var _ = Service("entries", func() {
 		})
 		Result(Journal)
 
-		// idが存在しない場合は404を返す
+		// id が存在しない、または他人のものなら 404
 		Error("not_found")
 		HTTP(func() {
 			PUT("/entries/{id}")
@@ -307,14 +310,14 @@ var _ = Service("entries", func() {
 	})
 
 	Method("delete", func() {
-		Description("Delete a journal entry by ID")
+		Description("Delete a journal entry by ID (entries of other users are not found)")
 		Payload(func() {
 			Attribute("id", Int64, "Entry ID")
 			Required("id")
 			jwtToken()
 		})
 
-		// idが存在しない場合は404を返す
+		// id が存在しない、または他人のものなら 404
 		Error("not_found")
 		HTTP(func() {
 			DELETE("/entries/{id}")

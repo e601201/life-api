@@ -339,14 +339,14 @@ func usersMeUsage() {
 
 // entriesUsage displays the usage of the entries command and its subcommands.
 func entriesUsage() {
-	fmt.Fprintln(os.Stderr, `Journal entries service`)
+	fmt.Fprintln(os.Stderr, `Journal entries of the authenticated user`)
 	fmt.Fprintf(os.Stderr, "Usage:\n    %s [globalflags] entries COMMAND [flags]\n\n", os.Args[0])
 	fmt.Fprintln(os.Stderr, "COMMAND:")
-	fmt.Fprintln(os.Stderr, `    create: Create a new journal entry`)
-	fmt.Fprintln(os.Stderr, `    list: List journal entries`)
-	fmt.Fprintln(os.Stderr, `    get: Get a journal entry by ID`)
-	fmt.Fprintln(os.Stderr, `    update: Update a journal entry by ID`)
-	fmt.Fprintln(os.Stderr, `    delete: Delete a journal entry by ID`)
+	fmt.Fprintln(os.Stderr, `    create: Create a new journal entry owned by the authenticated user`)
+	fmt.Fprintln(os.Stderr, `    list: List the authenticated user's journal entries`)
+	fmt.Fprintln(os.Stderr, `    get: Get a journal entry by ID (entries of other users are not found)`)
+	fmt.Fprintln(os.Stderr, `    update: Update a journal entry by ID (entries of other users are not found)`)
+	fmt.Fprintln(os.Stderr, `    delete: Delete a journal entry by ID (entries of other users are not found)`)
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, "Additional help:")
 	fmt.Fprintf(os.Stderr, "    %s entries COMMAND --help\n", os.Args[0])
@@ -360,7 +360,7 @@ func entriesCreateUsage() {
 
 	// Description
 	fmt.Fprintln(os.Stderr)
-	fmt.Fprintln(os.Stderr, `Create a new journal entry`)
+	fmt.Fprintln(os.Stderr, `Create a new journal entry owned by the authenticated user`)
 
 	// Flags list
 	fmt.Fprintln(os.Stderr, `    -body JSON: `)
@@ -381,7 +381,7 @@ func entriesListUsage() {
 
 	// Description
 	fmt.Fprintln(os.Stderr)
-	fmt.Fprintln(os.Stderr, `List journal entries`)
+	fmt.Fprintln(os.Stderr, `List the authenticated user's journal entries`)
 
 	// Flags list
 	fmt.Fprintln(os.Stderr, `    -limit INT: `)
@@ -402,7 +402,7 @@ func entriesGetUsage() {
 
 	// Description
 	fmt.Fprintln(os.Stderr)
-	fmt.Fprintln(os.Stderr, `Get a journal entry by ID`)
+	fmt.Fprintln(os.Stderr, `Get a journal entry by ID (entries of other users are not found)`)
 
 	// Flags list
 	fmt.Fprintln(os.Stderr, `    -id INT64: Entry ID`)
@@ -423,7 +423,7 @@ func entriesUpdateUsage() {
 
 	// Description
 	fmt.Fprintln(os.Stderr)
-	fmt.Fprintln(os.Stderr, `Update a journal entry by ID`)
+	fmt.Fprintln(os.Stderr, `Update a journal entry by ID (entries of other users are not found)`)
 
 	// Flags list
 	fmt.Fprintln(os.Stderr, `    -body JSON: `)
@@ -444,7 +444,7 @@ func entriesDeleteUsage() {
 
 	// Description
 	fmt.Fprintln(os.Stderr)
-	fmt.Fprintln(os.Stderr, `Delete a journal entry by ID`)
+	fmt.Fprintln(os.Stderr, `Delete a journal entry by ID (entries of other users are not found)`)
 
 	// Flags list
 	fmt.Fprintln(os.Stderr, `    -id INT64: Entry ID`)

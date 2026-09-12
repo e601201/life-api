@@ -14,17 +14,17 @@ import (
 	"goa.design/goa/v3/security"
 )
 
-// Journal entries service
+// Journal entries of the authenticated user
 type Service interface {
-	// Create a new journal entry
+	// Create a new journal entry owned by the authenticated user
 	Create(context.Context, *CreatePayload) (res *CreateResult, err error)
-	// List journal entries
+	// List the authenticated user's journal entries
 	List(context.Context, *ListPayload) (res []*Journal, err error)
-	// Get a journal entry by ID
+	// Get a journal entry by ID (entries of other users are not found)
 	Get(context.Context, *GetPayload) (res *Journal, err error)
-	// Update a journal entry by ID
+	// Update a journal entry by ID (entries of other users are not found)
 	Update(context.Context, *UpdatePayload) (res *Journal, err error)
-	// Delete a journal entry by ID
+	// Delete a journal entry by ID (entries of other users are not found)
 	Delete(context.Context, *DeletePayload) (err error)
 }
 

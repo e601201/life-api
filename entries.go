@@ -13,7 +13,11 @@ import (
 )
 
 // entries service の実装。データは PostgreSQL の entries テーブルに置く
-// （スキーマは db/migrations/000001_create_entries.up.sql）。
+// （スキーマは db/migrations/000001_create_entries.up.sql、000003 で user_id を NOT NULL に）。
+//
+// 全メソッドが JWTAuth の載せたユーザ ID で絞る。一覧は自分の記録だけ、単体の
+// get / update / delete は「id が無い」と「他人の id」を区別せずどちらも not_found にする。
+// 403 で分けると、その id が存在することが外から分かってしまう。
 type entriessrvc struct {
 	// 全メソッドが JWT を要求する（design の Security）。生成コードが
 	// Auth.JWTAuth を各メソッドの手前で呼ぶので、埋め込んで満たしておく。
@@ -37,6 +41,17 @@ const dateLayout = "2006-01-02"
 // notFound builds the not_found error declared in the design.
 func notFound(id int64) error {
 	return entries.MakeNotFound(fmt.Errorf("entry %d not found", id))
+}
+
+// userFromContext は JWTAuth が ctx に載せたユーザ ID を取り出す。無いのは認証を経ずに
+// 呼ばれたときで、HTTP 経由では起きない。サービスを直接呼ぶ経路で全件が見えたり、
+// user_id の無い行が入ったりしないよう、ここで止める。
+func userFromContext(ctx context.Context) (int64, error) {
+	id, ok := UserIDFromContext(ctx)
+	if !ok {
+		return 0, errors.New("no user in context")
+	}
+	return id, nil
 }
 
 // scanJournal は entries の 1 行を API の Journal に詰め替える。
@@ -85,10 +100,9 @@ func (s *entriessrvc) Create(ctx context.Context, p *entries.CreatePayload) (*en
 	log.Printf(ctx, "entries.create")
 
 	// user_id はリクエストではなく JWT から取る（JWTAuth が ctx に載せたもの）。
-	// 無いのは認証を経ずに呼ばれたときで、HTTP 経由では起きない。
-	userID, ok := UserIDFromContext(ctx)
-	if !ok {
-		return nil, errors.New("create entry: no user in context")
+	userID, err := userFromContext(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("create entry: %w", err)
 	}
 
 	// id は IDENTITY、created_at / updated_at は DEFAULT now() に任せ、
@@ -123,17 +137,23 @@ func (s *entriessrvc) Create(ctx context.Context, p *entries.CreatePayload) (*en
 func (s *entriessrvc) List(ctx context.Context, p *entries.ListPayload) ([]*entries.Journal, error) {
 	log.Printf(ctx, "entries.list limit=%d offset=%d", p.Limit, p.Offset)
 
-	// 記録日の新しい順。entries_entry_date_idx がこの並びなので、
-	// 件数が増えてもソートを挟まずに読める。
+	userID, err := userFromContext(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list entries: %w", err)
+	}
+
+	// 自分の記録を、記録日の新しい順。entries_user_id_entry_date_idx が
+	// (user_id, entry_date DESC, id DESC) なので、user_id で絞ったあともソートを挟まずに読める。
 	//
 	// limit / offset の既定値と取りうる範囲は DSL 側（Default / Minimum / Maximum）で
 	// 決めている。ここで補正すると同じ規則が 2 箇所に散るので、受け取った値をそのまま渡す。
 	const q = `SELECT ` + journalColumns + `
 	           FROM entries
+	           WHERE user_id = $1
 	           ORDER BY entry_date DESC, id DESC
-	           LIMIT $1 OFFSET $2`
+	           LIMIT $2 OFFSET $3`
 
-	rows, err := s.db.Query(ctx, q, p.Limit, p.Offset)
+	rows, err := s.db.Query(ctx, q, userID, p.Limit, p.Offset)
 	if err != nil {
 		return nil, fmt.Errorf("list entries: %w", err)
 	}
@@ -159,9 +179,15 @@ func (s *entriessrvc) List(ctx context.Context, p *entries.ListPayload) ([]*entr
 func (s *entriessrvc) Get(ctx context.Context, p *entries.GetPayload) (*entries.Journal, error) {
 	log.Printf(ctx, "entries.get id=%d", p.ID)
 
-	const q = `SELECT ` + journalColumns + ` FROM entries WHERE id = $1`
+	userID, err := userFromContext(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("get entry: %w", err)
+	}
 
-	j, err := scanJournal(s.db.QueryRow(ctx, q, p.ID))
+	// 他人の id は WHERE で落ちて ErrNoRows になり、存在しない id と同じ not_found になる。
+	const q = `SELECT ` + journalColumns + ` FROM entries WHERE id = $1 AND user_id = $2`
+
+	j, err := scanJournal(s.db.QueryRow(ctx, q, p.ID, userID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, notFound(p.ID)
 	}
@@ -175,15 +201,20 @@ func (s *entriessrvc) Get(ctx context.Context, p *entries.GetPayload) (*entries.
 func (s *entriessrvc) Update(ctx context.Context, p *entries.UpdatePayload) (*entries.Journal, error) {
 	log.Printf(ctx, "entries.update id=%d", p.ID)
 
+	userID, err := userFromContext(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("update entry: %w", err)
+	}
+
 	// created_at と user_id は SET に含めない。作成時の値をそのまま残し、
 	// updated_at だけ進める。
-	// 対象が無ければ RETURNING が 1 行も返さず、ErrNoRows になる。
+	// 対象が無い（存在しない、または他人のもの）なら RETURNING が 1 行も返さず、ErrNoRows になる。
 	const q = `UPDATE entries
 	           SET entry_date = $2::date, kind = $3, title = $4, body = $5, updated_at = now()
-	           WHERE id = $1
+	           WHERE id = $1 AND user_id = $6
 	           RETURNING ` + journalColumns
 
-	j, err := scanJournal(s.db.QueryRow(ctx, q, p.ID, p.EntryDate, p.Kind, p.Title, p.Body))
+	j, err := scanJournal(s.db.QueryRow(ctx, q, p.ID, p.EntryDate, p.Kind, p.Title, p.Body, userID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, notFound(p.ID)
 	}
@@ -197,10 +228,16 @@ func (s *entriessrvc) Update(ctx context.Context, p *entries.UpdatePayload) (*en
 func (s *entriessrvc) Delete(ctx context.Context, p *entries.DeletePayload) error {
 	log.Printf(ctx, "entries.delete id=%d", p.ID)
 
-	const q = `DELETE FROM entries WHERE id = $1`
+	userID, err := userFromContext(ctx)
+	if err != nil {
+		return fmt.Errorf("delete entry: %w", err)
+	}
+
+	const q = `DELETE FROM entries WHERE id = $1 AND user_id = $2`
 
 	// DELETE は対象が無くてもエラーにならないので、消えた行数で 404 を判定する。
-	tag, err := s.db.Exec(ctx, q, p.ID)
+	// 他人のものも 0 行で、存在しない id と同じ扱いになる。
+	tag, err := s.db.Exec(ctx, q, p.ID, userID)
 	if err != nil {
 		return fmt.Errorf("delete entry: %w", err)
 	}

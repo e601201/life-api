@@ -226,24 +226,63 @@ func TestHTTPRegisterValidation(t *testing.T) {
 	}
 }
 
-func TestHTTPTokenFromOtherUserDoesNotLeakIdentity(t *testing.T) {
+func TestHTTPEntriesScopedToUser(t *testing.T) {
 	srv := newTestServer(t)
 	aliceAuth, aliceID := login(t, srv, "alice@example.com", "correct horse")
 	bobAuth, bobID := login(t, srv, "bob@example.com", "battery staple")
 
 	// それぞれのトークンで作った entries の user_id が、それぞれの id になること。
+	ids := map[string]string{}
 	for _, tt := range []struct {
+		name          string
 		authorization string
 		want          float64
 	}{
-		{authorization: aliceAuth, want: aliceID},
-		{authorization: bobAuth, want: bobID},
+		{name: "alice", authorization: aliceAuth, want: aliceID},
+		{name: "bob", authorization: bobAuth, want: bobID},
 	} {
 		resp, body := call(t, srv, http.MethodPost, "/entries", tt.authorization,
-			map[string]string{"title": "誰の", "entry_date": "2026-09-01", "kind": "diary"})
+			map[string]string{"title": tt.name + " の記録", "entry_date": "2026-09-01", "kind": "diary"})
 		requireStatus(t, resp, body, http.StatusCreated, "")
 		if body["user_id"] != tt.want {
 			t.Errorf("user_id = %v, want %v", body["user_id"], tt.want)
 		}
+		ids[tt.name] = resp.Header.Get("Location")
+	}
+
+	// alice の一覧には alice の分だけ。
+	req, err := http.NewRequest(http.MethodGet, srv.URL+"/entries", nil)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Authorization", aliceAuth)
+	resp, err := srv.Client().Do(req)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	defer resp.Body.Close()
+	var list []map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&list); err != nil {
+		t.Fatalf("decode list: %v", err)
+	}
+	if len(list) != 1 || list[0]["user_id"] != aliceID {
+		t.Errorf("alice の一覧 = %v, alice の 1 件だけであること", list)
+	}
+
+	// alice から bob の id は 404（存在しない id と同じ）。
+	bobPath := ids["bob"]
+	resp, body := call(t, srv, http.MethodGet, bobPath, aliceAuth, nil)
+	requireStatus(t, resp, body, http.StatusNotFound, "not_found")
+	resp, body = call(t, srv, http.MethodPut, bobPath, aliceAuth,
+		map[string]string{"title": "乗っ取り", "entry_date": "2026-09-01", "kind": "diary"})
+	requireStatus(t, resp, body, http.StatusNotFound, "not_found")
+	resp, body = call(t, srv, http.MethodDelete, bobPath, aliceAuth, nil)
+	requireStatus(t, resp, body, http.StatusNotFound, "not_found")
+
+	// bob 自身からは読める。
+	resp, body = call(t, srv, http.MethodGet, bobPath, bobAuth, nil)
+	requireStatus(t, resp, body, http.StatusOK, "")
+	if body["title"] != "bob の記録" {
+		t.Errorf("title = %v, want %q", body["title"], "bob の記録")
 	}
 }

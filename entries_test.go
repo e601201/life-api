@@ -113,6 +113,14 @@ func newService(t *testing.T) (entries.Service, context.Context) {
 	return NewEntries(testPool, testAuth), ContextWithUserID(ctx, uid)
 }
 
+// asOtherUser は別のユーザを 1 人足して、その人として呼ぶための ctx を返す。
+// スコープ（他人の記録が見えない・触れない）を確かめるテストで使う。
+func asOtherUser(t *testing.T, ctx context.Context) context.Context {
+	t.Helper()
+	uid := insertUser(t, ctx, "other@example.com")
+	return ContextWithUserID(ctx, uid)
+}
+
 // mustCreate は前提となる 1 件を作る。作成そのものの検証は TestCreate でやるので、
 // ここで失敗したらテストを続ける意味がない。
 func mustCreate(t *testing.T, ctx context.Context, svc entries.Service, date, title string) *entries.CreateResult {
@@ -214,18 +222,108 @@ func TestCreate(t *testing.T) {
 	}
 }
 
-func TestCreateWithoutUser(t *testing.T) {
-	svc, _ := newService(t)
+func TestWithoutUser(t *testing.T) {
+	svc, ctx := newService(t)
+	created := mustCreate(t, ctx, svc, "2026-09-01", "誰かの記録")
 
-	// 認証を経ていない ctx では作れない。HTTP では JWTAuth が先に 401 を返すので
-	// ここには来ないが、サービスを直接呼ぶ経路で user_id が NULL のまま入るのを防ぐ。
-	_, err := svc.Create(context.Background(), &entries.CreatePayload{
-		EntryDate: "2026-09-01",
-		Kind:      "til",
-		Title:     "ユーザなし",
+	// 認証を経ていない ctx ではどのメソッドも動かない。HTTP では JWTAuth が先に 401 を
+	// 返すのでここには来ないが、サービスを直接呼ぶ経路で全件が見えたり、
+	// user_id の無い行が入ったりするのを防ぐ。
+	noUser := context.Background()
+	for _, tt := range []struct {
+		name string
+		call func() error
+	}{
+		{"create", func() error {
+			_, err := svc.Create(noUser, &entries.CreatePayload{EntryDate: "2026-09-01", Kind: "til", Title: "ユーザなし"})
+			return err
+		}},
+		{"list", func() error { _, err := svc.List(noUser, &entries.ListPayload{Limit: 10}); return err }},
+		{"get", func() error { _, err := svc.Get(noUser, &entries.GetPayload{ID: *created.ID}); return err }},
+		{"update", func() error {
+			_, err := svc.Update(noUser, &entries.UpdatePayload{ID: *created.ID, EntryDate: "2026-09-01", Kind: "til", Title: "ユーザなし"})
+			return err
+		}},
+		{"delete", func() error { return svc.Delete(noUser, &entries.DeletePayload{ID: *created.ID}) }},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.call(); err == nil {
+				t.Errorf("ユーザの無い ctx で %s が通っている", tt.name)
+			}
+		})
+	}
+}
+
+func TestEntriesRequireUserID(t *testing.T) {
+	_, ctx := newService(t)
+
+	// 000003 で user_id を NOT NULL にした。API を通らない経路でも「誰のものでもない記録」が
+	// 入らないこと（入ると誰からも見えない行になる）。
+	const q = `INSERT INTO entries (user_id, entry_date, kind, title) VALUES (NULL, '2026-09-01', 'til', 'orphan')`
+	if _, err := testPool.Exec(ctx, q); err == nil {
+		t.Fatal("user_id が NULL の行を入れられている")
+	}
+}
+
+func TestListScopedToUser(t *testing.T) {
+	svc, alice := newService(t)
+	bob := asOtherUser(t, alice)
+
+	a1 := mustCreate(t, alice, svc, "2026-09-01", "alice 1")
+	b1 := mustCreate(t, bob, svc, "2026-09-02", "bob 1")
+	a2 := mustCreate(t, alice, svc, "2026-09-03", "alice 2")
+
+	// それぞれ自分の分だけ。並びは記録日の新しい順のまま。
+	for _, tt := range []struct {
+		name string
+		ctx  context.Context
+		want []int64
+	}{
+		{name: "alice", ctx: alice, want: []int64{*a2.ID, *a1.ID}},
+		{name: "bob", ctx: bob, want: []int64{*b1.ID}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := svc.List(tt.ctx, &entries.ListPayload{Limit: 10})
+			if err != nil {
+				t.Fatalf("list: %v", err)
+			}
+			if len(got) != len(tt.want) {
+				t.Fatalf("len = %d, want %d", len(got), len(tt.want))
+			}
+			for i, id := range tt.want {
+				if got[i].ID == nil || *got[i].ID != id {
+					t.Errorf("list[%d].id = %s, want %d", i, derefInt64(got[i].ID), id)
+				}
+			}
+		})
+	}
+}
+
+func TestOtherUsersEntryIsNotFound(t *testing.T) {
+	svc, alice := newService(t)
+	bob := asOtherUser(t, alice)
+
+	created := mustCreate(t, alice, svc, "2026-09-01", "alice の記録")
+
+	// bob からは存在しない id と同じ not_found。403 で分けると id の存在が分かってしまう。
+	_, err := svc.Get(bob, &entries.GetPayload{ID: *created.ID})
+	requireErrorName(t, err, "not_found")
+
+	_, err = svc.Update(bob, &entries.UpdatePayload{
+		ID: *created.ID, EntryDate: "2026-09-02", Kind: "diary", Title: "bob が書き換え",
 	})
-	if err == nil {
-		t.Fatal("ユーザの無い ctx で作成できている")
+	requireErrorName(t, err, "not_found")
+
+	err = svc.Delete(bob, &entries.DeletePayload{ID: *created.ID})
+	requireErrorName(t, err, "not_found")
+
+	// alice の記録は何も変わっていない。
+	got, err := svc.Get(alice, &entries.GetPayload{ID: *created.ID})
+	if err != nil {
+		t.Fatalf("get as alice: %v", err)
+	}
+	if got.Title != "alice の記録" || got.EntryDate != "2026-09-01" {
+		t.Errorf("title/entry_date = %q/%q, 他人の update が効いている", got.Title, got.EntryDate)
 	}
 }
 
