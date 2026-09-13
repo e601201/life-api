@@ -25,7 +25,7 @@ func BuildCreatePayload(entriesCreateBody string, entriesCreateToken string) (*e
 	{
 		err = json.Unmarshal([]byte(entriesCreateBody), &body)
 		if err != nil {
-			return nil, fmt.Errorf("invalid JSON for body, \nerror: %s, \nexample of valid JSON:\n%s", err, "'{\n      \"body\": \"Temporibus neque cumque fuga sit quae esse.\",\n      \"entry_date\": \"1994-04-12\",\n      \"kind\": \"diary\",\n      \"title\": \"u\"\n   }'")
+			return nil, fmt.Errorf("invalid JSON for body, \nerror: %s, \nexample of valid JSON:\n%s", err, "'{\n      \"body\": \"Temporibus neque cumque fuga sit quae esse.\",\n      \"entry_date\": \"1994-04-12\",\n      \"kind\": \"diary\",\n      \"tags\": [\n         \"go\",\n         \"goa\"\n      ],\n      \"title\": \"u\"\n   }'")
 		}
 		err = goa.MergeErrors(err, goa.ValidateFormat("body.entry_date", body.EntryDate, goa.FormatDate))
 		if !(body.Kind == "til" || body.Kind == "diary") {
@@ -33,6 +33,18 @@ func BuildCreatePayload(entriesCreateBody string, entriesCreateToken string) (*e
 		}
 		if utf8.RuneCountInString(body.Title) < 1 {
 			err = goa.MergeErrors(err, goa.InvalidLengthError("body.title", body.Title, utf8.RuneCountInString(body.Title), 1, true))
+		}
+		if len(body.Tags) > 20 {
+			err = goa.MergeErrors(err, goa.InvalidLengthError("body.tags", body.Tags, len(body.Tags), 20, false))
+		}
+		for _, e := range body.Tags {
+			err = goa.MergeErrors(err, goa.ValidatePattern("body.tags[*]", e, "^\\S(.*\\S)?$"))
+			if utf8.RuneCountInString(e) < 1 {
+				err = goa.MergeErrors(err, goa.InvalidLengthError("body.tags[*]", e, utf8.RuneCountInString(e), 1, true))
+			}
+			if utf8.RuneCountInString(e) > 50 {
+				err = goa.MergeErrors(err, goa.InvalidLengthError("body.tags[*]", e, utf8.RuneCountInString(e), 50, false))
+			}
 		}
 		if err != nil {
 			return nil, err
@@ -49,6 +61,12 @@ func BuildCreatePayload(entriesCreateBody string, entriesCreateToken string) (*e
 		Kind:      body.Kind,
 		Title:     body.Title,
 		Body:      body.Body,
+	}
+	if body.Tags != nil {
+		v.Tags = make([]string, len(body.Tags))
+		for i, val := range body.Tags {
+			v.Tags[i] = val
+		}
 	}
 	v.Token = token
 
@@ -142,7 +160,7 @@ func BuildUpdatePayload(entriesUpdateBody string, entriesUpdateID string, entrie
 	{
 		err = json.Unmarshal([]byte(entriesUpdateBody), &body)
 		if err != nil {
-			return nil, fmt.Errorf("invalid JSON for body, \nerror: %s, \nexample of valid JSON:\n%s", err, "'{\n      \"body\": \"Natus maiores quasi.\",\n      \"entry_date\": \"1998-12-26\",\n      \"kind\": \"til\",\n      \"title\": \"r\"\n   }'")
+			return nil, fmt.Errorf("invalid JSON for body, \nerror: %s, \nexample of valid JSON:\n%s", err, "'{\n      \"body\": \"Natus maiores quasi.\",\n      \"entry_date\": \"1998-12-26\",\n      \"kind\": \"til\",\n      \"tags\": [\n         \"go\",\n         \"goa\"\n      ],\n      \"title\": \"r\"\n   }'")
 		}
 		err = goa.MergeErrors(err, goa.ValidateFormat("body.entry_date", body.EntryDate, goa.FormatDate))
 		if !(body.Kind == "til" || body.Kind == "diary") {
@@ -150,6 +168,18 @@ func BuildUpdatePayload(entriesUpdateBody string, entriesUpdateID string, entrie
 		}
 		if utf8.RuneCountInString(body.Title) < 1 {
 			err = goa.MergeErrors(err, goa.InvalidLengthError("body.title", body.Title, utf8.RuneCountInString(body.Title), 1, true))
+		}
+		if len(body.Tags) > 20 {
+			err = goa.MergeErrors(err, goa.InvalidLengthError("body.tags", body.Tags, len(body.Tags), 20, false))
+		}
+		for _, e := range body.Tags {
+			err = goa.MergeErrors(err, goa.ValidatePattern("body.tags[*]", e, "^\\S(.*\\S)?$"))
+			if utf8.RuneCountInString(e) < 1 {
+				err = goa.MergeErrors(err, goa.InvalidLengthError("body.tags[*]", e, utf8.RuneCountInString(e), 1, true))
+			}
+			if utf8.RuneCountInString(e) > 50 {
+				err = goa.MergeErrors(err, goa.InvalidLengthError("body.tags[*]", e, utf8.RuneCountInString(e), 50, false))
+			}
 		}
 		if err != nil {
 			return nil, err
@@ -173,6 +203,12 @@ func BuildUpdatePayload(entriesUpdateBody string, entriesUpdateID string, entrie
 		Kind:      body.Kind,
 		Title:     body.Title,
 		Body:      body.Body,
+	}
+	if body.Tags != nil {
+		v.Tags = make([]string, len(body.Tags))
+		for i, val := range body.Tags {
+			v.Tags[i] = val
+		}
 	}
 	v.ID = id
 	v.Token = token

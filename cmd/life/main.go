@@ -15,6 +15,7 @@ import (
 	"github.com/e601201/life-api/db"
 	entries "github.com/e601201/life-api/gen/entries"
 	health "github.com/e601201/life-api/gen/health"
+	tags "github.com/e601201/life-api/gen/tags"
 	users "github.com/e601201/life-api/gen/users"
 	"goa.design/clue/debug"
 	"goa.design/clue/log"
@@ -73,11 +74,13 @@ func main() {
 		healthSvc  health.Service
 		usersSvc   users.Service
 		entriesSvc entries.Service
+		tagsSvc    tags.Service
 	)
 	{
 		healthSvc = life.NewHealth(pool)
 		usersSvc = life.NewUsers(pool, auth)
 		entriesSvc = life.NewEntries(pool, auth)
+		tagsSvc = life.NewTags(pool, auth)
 	}
 
 	// Wrap the services in endpoints that can be invoked from other services
@@ -86,6 +89,7 @@ func main() {
 		healthEndpoints  *health.Endpoints
 		usersEndpoints   *users.Endpoints
 		entriesEndpoints *entries.Endpoints
+		tagsEndpoints    *tags.Endpoints
 	)
 	{
 		healthEndpoints = health.NewEndpoints(healthSvc)
@@ -98,6 +102,9 @@ func main() {
 		entriesEndpoints = entries.NewEndpoints(entriesSvc)
 		entriesEndpoints.Use(debug.LogPayloads())
 		entriesEndpoints.Use(log.Endpoint)
+		tagsEndpoints = tags.NewEndpoints(tagsSvc)
+		tagsEndpoints.Use(debug.LogPayloads())
+		tagsEndpoints.Use(log.Endpoint)
 	}
 
 	// Create channel used by both the signal handler and server goroutines
@@ -139,7 +146,7 @@ func main() {
 			} else if u.Port() == "" {
 				u.Host = net.JoinHostPort(u.Host, "80")
 			}
-			handleHTTPServer(ctx, u, healthEndpoints, usersEndpoints, entriesEndpoints, &wg, errc, *dbgF)
+			handleHTTPServer(ctx, u, healthEndpoints, usersEndpoints, entriesEndpoints, tagsEndpoints, &wg, errc, *dbgF)
 		}
 
 	case "container":
@@ -164,7 +171,7 @@ func main() {
 			} else if u.Port() == "" {
 				u.Host = net.JoinHostPort(u.Host, "80")
 			}
-			handleHTTPServer(ctx, u, healthEndpoints, usersEndpoints, entriesEndpoints, &wg, errc, *dbgF)
+			handleHTTPServer(ctx, u, healthEndpoints, usersEndpoints, entriesEndpoints, tagsEndpoints, &wg, errc, *dbgF)
 		}
 
 	default:

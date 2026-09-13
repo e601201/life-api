@@ -12,7 +12,9 @@ import (
 	health "github.com/e601201/life-api/gen/health"
 	entriessvr "github.com/e601201/life-api/gen/http/entries/server"
 	healthsvr "github.com/e601201/life-api/gen/http/health/server"
+	tagssvr "github.com/e601201/life-api/gen/http/tags/server"
 	userssvr "github.com/e601201/life-api/gen/http/users/server"
+	tags "github.com/e601201/life-api/gen/tags"
 	users "github.com/e601201/life-api/gen/users"
 	"goa.design/clue/debug"
 	"goa.design/clue/log"
@@ -26,7 +28,7 @@ const maxRequestBody = 1 << 20 // 1MiB
 
 // handleHTTPServer starts configures and starts a HTTP server on the given
 // URL. It shuts down the server if any error is received in the error channel.
-func handleHTTPServer(ctx context.Context, u *url.URL, healthEndpoints *health.Endpoints, usersEndpoints *users.Endpoints, entriesEndpoints *entries.Endpoints, wg *sync.WaitGroup, errc chan error, dbg bool) {
+func handleHTTPServer(ctx context.Context, u *url.URL, healthEndpoints *health.Endpoints, usersEndpoints *users.Endpoints, entriesEndpoints *entries.Endpoints, tagsEndpoints *tags.Endpoints, wg *sync.WaitGroup, errc chan error, dbg bool) {
 
 	// Provide the transport specific request decoder and response encoder.
 	// The goa http package has built-in support for JSON, XML and gob.
@@ -58,6 +60,7 @@ func handleHTTPServer(ctx context.Context, u *url.URL, healthEndpoints *health.E
 		healthServer  *healthsvr.Server
 		usersServer   *userssvr.Server
 		entriesServer *entriessvr.Server
+		tagsServer    *tagssvr.Server
 	)
 	{
 		eh := errorHandler(ctx)
@@ -65,12 +68,14 @@ func handleHTTPServer(ctx context.Context, u *url.URL, healthEndpoints *health.E
 		healthServer = healthsvr.New(healthEndpoints, mux, dec, enc, eh, ef)
 		usersServer = userssvr.New(usersEndpoints, mux, dec, enc, eh, ef)
 		entriesServer = entriessvr.New(entriesEndpoints, mux, dec, enc, eh, ef)
+		tagsServer = tagssvr.New(tagsEndpoints, mux, dec, enc, eh, ef)
 	}
 
 	// Configure the mux.
 	healthsvr.Mount(mux, healthServer)
 	userssvr.Mount(mux, usersServer)
 	entriessvr.Mount(mux, entriesServer)
+	tagssvr.Mount(mux, tagsServer)
 
 	var handler http.Handler = mux
 	if dbg {
@@ -100,6 +105,9 @@ func handleHTTPServer(ctx context.Context, u *url.URL, healthEndpoints *health.E
 		log.Printf(ctx, "HTTP %q mounted on %s %s", m.Method, m.Verb, m.Pattern)
 	}
 	for _, m := range entriesServer.Mounts {
+		log.Printf(ctx, "HTTP %q mounted on %s %s", m.Method, m.Verb, m.Pattern)
+	}
+	for _, m := range tagsServer.Mounts {
 		log.Printf(ctx, "HTTP %q mounted on %s %s", m.Method, m.Verb, m.Pattern)
 	}
 

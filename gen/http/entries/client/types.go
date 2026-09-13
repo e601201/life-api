@@ -22,6 +22,8 @@ type CreateRequestBody struct {
 	Kind      string  `form:"kind" json:"kind" xml:"kind"`
 	Title     string  `form:"title" json:"title" xml:"title"`
 	Body      *string `form:"body,omitempty" json:"body,omitempty" xml:"body,omitempty"`
+	// タグ名の一覧
+	Tags []string `form:"tags,omitempty" json:"tags,omitempty" xml:"tags,omitempty"`
 }
 
 // UpdateRequestBody is the type of the "entries" service "update" endpoint
@@ -32,6 +34,8 @@ type UpdateRequestBody struct {
 	Kind      string  `form:"kind" json:"kind" xml:"kind"`
 	Title     string  `form:"title" json:"title" xml:"title"`
 	Body      *string `form:"body,omitempty" json:"body,omitempty" xml:"body,omitempty"`
+	// タグ名の一覧
+	Tags []string `form:"tags,omitempty" json:"tags,omitempty" xml:"tags,omitempty"`
 }
 
 // CreateResponseBody is the type of the "entries" service "create" endpoint
@@ -46,6 +50,8 @@ type CreateResponseBody struct {
 	Kind      *string `form:"kind,omitempty" json:"kind,omitempty" xml:"kind,omitempty"`
 	Title     *string `form:"title,omitempty" json:"title,omitempty" xml:"title,omitempty"`
 	Body      *string `form:"body,omitempty" json:"body,omitempty" xml:"body,omitempty"`
+	// タグ名の一覧
+	Tags []string `form:"tags,omitempty" json:"tags,omitempty" xml:"tags,omitempty"`
 }
 
 // GetResponseBody is the type of the "entries" service "get" endpoint HTTP
@@ -60,6 +66,8 @@ type GetResponseBody struct {
 	Kind      *string `form:"kind,omitempty" json:"kind,omitempty" xml:"kind,omitempty"`
 	Title     *string `form:"title,omitempty" json:"title,omitempty" xml:"title,omitempty"`
 	Body      *string `form:"body,omitempty" json:"body,omitempty" xml:"body,omitempty"`
+	// タグ名の一覧
+	Tags []string `form:"tags,omitempty" json:"tags,omitempty" xml:"tags,omitempty"`
 }
 
 // UpdateResponseBody is the type of the "entries" service "update" endpoint
@@ -74,6 +82,8 @@ type UpdateResponseBody struct {
 	Kind      *string `form:"kind,omitempty" json:"kind,omitempty" xml:"kind,omitempty"`
 	Title     *string `form:"title,omitempty" json:"title,omitempty" xml:"title,omitempty"`
 	Body      *string `form:"body,omitempty" json:"body,omitempty" xml:"body,omitempty"`
+	// タグ名の一覧
+	Tags []string `form:"tags,omitempty" json:"tags,omitempty" xml:"tags,omitempty"`
 }
 
 // CreateUnauthorizedResponseBody is the type of the "entries" service "create"
@@ -231,6 +241,8 @@ type JournalResponse struct {
 	Kind      *string `form:"kind,omitempty" json:"kind,omitempty" xml:"kind,omitempty"`
 	Title     *string `form:"title,omitempty" json:"title,omitempty" xml:"title,omitempty"`
 	Body      *string `form:"body,omitempty" json:"body,omitempty" xml:"body,omitempty"`
+	// タグ名の一覧
+	Tags []string `form:"tags,omitempty" json:"tags,omitempty" xml:"tags,omitempty"`
 }
 
 // NewCreateRequestBody builds the HTTP request body from the payload of the
@@ -241,6 +253,12 @@ func NewCreateRequestBody(p *entries.CreatePayload) *CreateRequestBody {
 		Kind:      p.Kind,
 		Title:     p.Title,
 		Body:      p.Body,
+	}
+	if p.Tags != nil {
+		body.Tags = make([]string, len(p.Tags))
+		for i, val := range p.Tags {
+			body.Tags[i] = val
+		}
 	}
 	return body
 }
@@ -253,6 +271,12 @@ func NewUpdateRequestBody(p *entries.UpdatePayload) *UpdateRequestBody {
 		Kind:      p.Kind,
 		Title:     p.Title,
 		Body:      p.Body,
+	}
+	if p.Tags != nil {
+		body.Tags = make([]string, len(p.Tags))
+		for i, val := range p.Tags {
+			body.Tags[i] = val
+		}
 	}
 	return body
 }
@@ -269,6 +293,10 @@ func NewCreateResultCreated(body *CreateResponseBody, location string) *entries.
 		Kind:      *body.Kind,
 		Title:     *body.Title,
 		Body:      body.Body,
+	}
+	v.Tags = make([]string, len(body.Tags))
+	for i, val := range body.Tags {
+		v.Tags[i] = val
 	}
 	v.Location = location
 
@@ -333,6 +361,10 @@ func NewGetJournalOK(body *GetResponseBody) *entries.Journal {
 		Title:     *body.Title,
 		Body:      body.Body,
 	}
+	v.Tags = make([]string, len(body.Tags))
+	for i, val := range body.Tags {
+		v.Tags[i] = val
+	}
 
 	return v
 }
@@ -377,6 +409,10 @@ func NewUpdateJournalOK(body *UpdateResponseBody) *entries.Journal {
 		Kind:      *body.Kind,
 		Title:     *body.Title,
 		Body:      body.Body,
+	}
+	v.Tags = make([]string, len(body.Tags))
+	for i, val := range body.Tags {
+		v.Tags[i] = val
 	}
 
 	return v
@@ -442,6 +478,9 @@ func NewDeleteUnauthorized(body *DeleteUnauthorizedResponseBody) *goa.ServiceErr
 
 // ValidateCreateResponseBody runs the validations defined on CreateResponseBody
 func ValidateCreateResponseBody(body *CreateResponseBody) (err error) {
+	if body.Tags == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("tags", "body"))
+	}
 	if body.Title == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("title", "body"))
 	}
@@ -468,6 +507,18 @@ func ValidateCreateResponseBody(body *CreateResponseBody) (err error) {
 	if body.Title != nil {
 		if utf8.RuneCountInString(*body.Title) < 1 {
 			err = goa.MergeErrors(err, goa.InvalidLengthError("body.title", *body.Title, utf8.RuneCountInString(*body.Title), 1, true))
+		}
+	}
+	if len(body.Tags) > 20 {
+		err = goa.MergeErrors(err, goa.InvalidLengthError("body.tags", body.Tags, len(body.Tags), 20, false))
+	}
+	for _, e := range body.Tags {
+		err = goa.MergeErrors(err, goa.ValidatePattern("body.tags[*]", e, "^\\S(.*\\S)?$"))
+		if utf8.RuneCountInString(e) < 1 {
+			err = goa.MergeErrors(err, goa.InvalidLengthError("body.tags[*]", e, utf8.RuneCountInString(e), 1, true))
+		}
+		if utf8.RuneCountInString(e) > 50 {
+			err = goa.MergeErrors(err, goa.InvalidLengthError("body.tags[*]", e, utf8.RuneCountInString(e), 50, false))
 		}
 	}
 	return
@@ -475,6 +526,9 @@ func ValidateCreateResponseBody(body *CreateResponseBody) (err error) {
 
 // ValidateGetResponseBody runs the validations defined on GetResponseBody
 func ValidateGetResponseBody(body *GetResponseBody) (err error) {
+	if body.Tags == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("tags", "body"))
+	}
 	if body.Title == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("title", "body"))
 	}
@@ -501,6 +555,18 @@ func ValidateGetResponseBody(body *GetResponseBody) (err error) {
 	if body.Title != nil {
 		if utf8.RuneCountInString(*body.Title) < 1 {
 			err = goa.MergeErrors(err, goa.InvalidLengthError("body.title", *body.Title, utf8.RuneCountInString(*body.Title), 1, true))
+		}
+	}
+	if len(body.Tags) > 20 {
+		err = goa.MergeErrors(err, goa.InvalidLengthError("body.tags", body.Tags, len(body.Tags), 20, false))
+	}
+	for _, e := range body.Tags {
+		err = goa.MergeErrors(err, goa.ValidatePattern("body.tags[*]", e, "^\\S(.*\\S)?$"))
+		if utf8.RuneCountInString(e) < 1 {
+			err = goa.MergeErrors(err, goa.InvalidLengthError("body.tags[*]", e, utf8.RuneCountInString(e), 1, true))
+		}
+		if utf8.RuneCountInString(e) > 50 {
+			err = goa.MergeErrors(err, goa.InvalidLengthError("body.tags[*]", e, utf8.RuneCountInString(e), 50, false))
 		}
 	}
 	return
@@ -508,6 +574,9 @@ func ValidateGetResponseBody(body *GetResponseBody) (err error) {
 
 // ValidateUpdateResponseBody runs the validations defined on UpdateResponseBody
 func ValidateUpdateResponseBody(body *UpdateResponseBody) (err error) {
+	if body.Tags == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("tags", "body"))
+	}
 	if body.Title == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("title", "body"))
 	}
@@ -534,6 +603,18 @@ func ValidateUpdateResponseBody(body *UpdateResponseBody) (err error) {
 	if body.Title != nil {
 		if utf8.RuneCountInString(*body.Title) < 1 {
 			err = goa.MergeErrors(err, goa.InvalidLengthError("body.title", *body.Title, utf8.RuneCountInString(*body.Title), 1, true))
+		}
+	}
+	if len(body.Tags) > 20 {
+		err = goa.MergeErrors(err, goa.InvalidLengthError("body.tags", body.Tags, len(body.Tags), 20, false))
+	}
+	for _, e := range body.Tags {
+		err = goa.MergeErrors(err, goa.ValidatePattern("body.tags[*]", e, "^\\S(.*\\S)?$"))
+		if utf8.RuneCountInString(e) < 1 {
+			err = goa.MergeErrors(err, goa.InvalidLengthError("body.tags[*]", e, utf8.RuneCountInString(e), 1, true))
+		}
+		if utf8.RuneCountInString(e) > 50 {
+			err = goa.MergeErrors(err, goa.InvalidLengthError("body.tags[*]", e, utf8.RuneCountInString(e), 50, false))
 		}
 	}
 	return
@@ -733,6 +814,9 @@ func ValidateDeleteUnauthorizedResponseBody(body *DeleteUnauthorizedResponseBody
 
 // ValidateJournalResponse runs the validations defined on JournalResponse
 func ValidateJournalResponse(body *JournalResponse) (err error) {
+	if body.Tags == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("tags", "body"))
+	}
 	if body.Title == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("title", "body"))
 	}
@@ -759,6 +843,18 @@ func ValidateJournalResponse(body *JournalResponse) (err error) {
 	if body.Title != nil {
 		if utf8.RuneCountInString(*body.Title) < 1 {
 			err = goa.MergeErrors(err, goa.InvalidLengthError("body.title", *body.Title, utf8.RuneCountInString(*body.Title), 1, true))
+		}
+	}
+	if len(body.Tags) > 20 {
+		err = goa.MergeErrors(err, goa.InvalidLengthError("body.tags", body.Tags, len(body.Tags), 20, false))
+	}
+	for _, e := range body.Tags {
+		err = goa.MergeErrors(err, goa.ValidatePattern("body.tags[*]", e, "^\\S(.*\\S)?$"))
+		if utf8.RuneCountInString(e) < 1 {
+			err = goa.MergeErrors(err, goa.InvalidLengthError("body.tags[*]", e, utf8.RuneCountInString(e), 1, true))
+		}
+		if utf8.RuneCountInString(e) > 50 {
+			err = goa.MergeErrors(err, goa.InvalidLengthError("body.tags[*]", e, utf8.RuneCountInString(e), 50, false))
 		}
 	}
 	return

@@ -15,6 +15,7 @@ import (
 
 	entriesc "github.com/e601201/life-api/gen/http/entries/client"
 	healthc "github.com/e601201/life-api/gen/http/health/client"
+	tagsc "github.com/e601201/life-api/gen/http/tags/client"
 	usersc "github.com/e601201/life-api/gen/http/users/client"
 	goahttp "goa.design/goa/v3/http"
 	goa "goa.design/goa/v3/pkg"
@@ -28,6 +29,7 @@ func UsageCommands() []string {
 		"health check",
 		"users (register|login|me)",
 		"entries (create|list|get|update|delete)",
+		"tags (list|update|delete)",
 	}
 }
 
@@ -35,7 +37,8 @@ func UsageCommands() []string {
 func UsageExamples() string {
 	return os.Args[0] + " " + "health check" + "\n" +
 		os.Args[0] + " " + "users register --body '{\n      \"email\": \"c59\",\n      \"password\": \"082\"\n   }'" + "\n" +
-		os.Args[0] + " " + "entries create --body '{\n      \"body\": \"Temporibus neque cumque fuga sit quae esse.\",\n      \"entry_date\": \"1994-04-12\",\n      \"kind\": \"diary\",\n      \"title\": \"u\"\n   }' --token \"Ipsum voluptatem aspernatur voluptatem dignissimos est.\"" + "\n" +
+		os.Args[0] + " " + "entries create --body '{\n      \"body\": \"Temporibus neque cumque fuga sit quae esse.\",\n      \"entry_date\": \"1994-04-12\",\n      \"kind\": \"diary\",\n      \"tags\": [\n         \"go\",\n         \"goa\"\n      ],\n      \"title\": \"u\"\n   }' --token \"Ipsum voluptatem aspernatur voluptatem dignissimos est.\"" + "\n" +
+		os.Args[0] + " " + "tags list --token \"Animi qui itaque.\"" + "\n" +
 		""
 }
 
@@ -87,6 +90,20 @@ func ParseEndpoint(
 		entriesDeleteFlags     = flag.NewFlagSet("delete", flag.ExitOnError)
 		entriesDeleteIDFlag    = entriesDeleteFlags.String("id", "REQUIRED", "Entry ID")
 		entriesDeleteTokenFlag = entriesDeleteFlags.String("token", "", "")
+
+		tagsFlags = flag.NewFlagSet("tags", flag.ContinueOnError)
+
+		tagsListFlags     = flag.NewFlagSet("list", flag.ExitOnError)
+		tagsListTokenFlag = tagsListFlags.String("token", "", "")
+
+		tagsUpdateFlags     = flag.NewFlagSet("update", flag.ExitOnError)
+		tagsUpdateBodyFlag  = tagsUpdateFlags.String("body", "REQUIRED", "")
+		tagsUpdateIDFlag    = tagsUpdateFlags.String("id", "REQUIRED", "Tag ID")
+		tagsUpdateTokenFlag = tagsUpdateFlags.String("token", "", "")
+
+		tagsDeleteFlags     = flag.NewFlagSet("delete", flag.ExitOnError)
+		tagsDeleteIDFlag    = tagsDeleteFlags.String("id", "REQUIRED", "Tag ID")
+		tagsDeleteTokenFlag = tagsDeleteFlags.String("token", "", "")
 	)
 	healthFlags.Usage = healthUsage
 	healthCheckFlags.Usage = healthCheckUsage
@@ -102,6 +119,11 @@ func ParseEndpoint(
 	entriesGetFlags.Usage = entriesGetUsage
 	entriesUpdateFlags.Usage = entriesUpdateUsage
 	entriesDeleteFlags.Usage = entriesDeleteUsage
+
+	tagsFlags.Usage = tagsUsage
+	tagsListFlags.Usage = tagsListUsage
+	tagsUpdateFlags.Usage = tagsUpdateUsage
+	tagsDeleteFlags.Usage = tagsDeleteUsage
 
 	if err := flag.CommandLine.Parse(os.Args[1:]); err != nil {
 		return nil, nil, err
@@ -124,6 +146,8 @@ func ParseEndpoint(
 			svcf = usersFlags
 		case "entries":
 			svcf = entriesFlags
+		case "tags":
+			svcf = tagsFlags
 		default:
 			return nil, nil, fmt.Errorf("unknown service %q", svcn)
 		}
@@ -175,6 +199,19 @@ func ParseEndpoint(
 
 			case "delete":
 				epf = entriesDeleteFlags
+
+			}
+
+		case "tags":
+			switch epn {
+			case "list":
+				epf = tagsListFlags
+
+			case "update":
+				epf = tagsUpdateFlags
+
+			case "delete":
+				epf = tagsDeleteFlags
 
 			}
 
@@ -235,6 +272,19 @@ func ParseEndpoint(
 			case "delete":
 				endpoint = c.Delete()
 				data, err = entriesc.BuildDeletePayload(*entriesDeleteIDFlag, *entriesDeleteTokenFlag)
+			}
+		case "tags":
+			c := tagsc.NewClient(scheme, host, doer, enc, dec, restore)
+			switch epn {
+			case "list":
+				endpoint = c.List()
+				data, err = tagsc.BuildListPayload(*tagsListTokenFlag)
+			case "update":
+				endpoint = c.Update()
+				data, err = tagsc.BuildUpdatePayload(*tagsUpdateBodyFlag, *tagsUpdateIDFlag, *tagsUpdateTokenFlag)
+			case "delete":
+				endpoint = c.Delete()
+				data, err = tagsc.BuildDeletePayload(*tagsDeleteIDFlag, *tagsDeleteTokenFlag)
 			}
 		}
 	}
@@ -368,7 +418,7 @@ func entriesCreateUsage() {
 
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, "Example:")
-	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "entries create --body '{\n      \"body\": \"Temporibus neque cumque fuga sit quae esse.\",\n      \"entry_date\": \"1994-04-12\",\n      \"kind\": \"diary\",\n      \"title\": \"u\"\n   }' --token \"Ipsum voluptatem aspernatur voluptatem dignissimos est.\"")
+	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "entries create --body '{\n      \"body\": \"Temporibus neque cumque fuga sit quae esse.\",\n      \"entry_date\": \"1994-04-12\",\n      \"kind\": \"diary\",\n      \"tags\": [\n         \"go\",\n         \"goa\"\n      ],\n      \"title\": \"u\"\n   }' --token \"Ipsum voluptatem aspernatur voluptatem dignissimos est.\"")
 }
 
 func entriesListUsage() {
@@ -432,7 +482,7 @@ func entriesUpdateUsage() {
 
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, "Example:")
-	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "entries update --body '{\n      \"body\": \"Natus maiores quasi.\",\n      \"entry_date\": \"1998-12-26\",\n      \"kind\": \"til\",\n      \"title\": \"r\"\n   }' --id 6545909915602064166 --token \"Maxime ipsam ut quasi ea nulla.\"")
+	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "entries update --body '{\n      \"body\": \"Natus maiores quasi.\",\n      \"entry_date\": \"1998-12-26\",\n      \"kind\": \"til\",\n      \"tags\": [\n         \"go\",\n         \"goa\"\n      ],\n      \"title\": \"r\"\n   }' --id 6545909915602064166 --token \"Maxime ipsam ut quasi ea nulla.\"")
 }
 
 func entriesDeleteUsage() {
@@ -453,4 +503,76 @@ func entriesDeleteUsage() {
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, "Example:")
 	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "entries delete --id 5830450457673791293 --token \"Fugit iure aspernatur iusto dolorem.\"")
+}
+
+// tagsUsage displays the usage of the tags command and its subcommands.
+func tagsUsage() {
+	fmt.Fprintln(os.Stderr, `Tags of the authenticated user`)
+	fmt.Fprintf(os.Stderr, "Usage:\n    %s [globalflags] tags COMMAND [flags]\n\n", os.Args[0])
+	fmt.Fprintln(os.Stderr, "COMMAND:")
+	fmt.Fprintln(os.Stderr, `    list: List the authenticated user's tags with entry counts, sorted by name`)
+	fmt.Fprintln(os.Stderr, `    update: Rename a tag (applies to every entry carrying it)`)
+	fmt.Fprintln(os.Stderr, `    delete: Delete a tag and detach it from every entry`)
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, "Additional help:")
+	fmt.Fprintf(os.Stderr, "    %s tags COMMAND --help\n", os.Args[0])
+}
+func tagsListUsage() {
+	// Header with flags
+	fmt.Fprintf(os.Stderr, "%s [flags] tags list", os.Args[0])
+	fmt.Fprint(os.Stderr, " -token STRING")
+	fmt.Fprintln(os.Stderr)
+
+	// Description
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, `List the authenticated user's tags with entry counts, sorted by name`)
+
+	// Flags list
+	fmt.Fprintln(os.Stderr, `    -token STRING: `)
+
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, "Example:")
+	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "tags list --token \"Animi qui itaque.\"")
+}
+
+func tagsUpdateUsage() {
+	// Header with flags
+	fmt.Fprintf(os.Stderr, "%s [flags] tags update", os.Args[0])
+	fmt.Fprint(os.Stderr, " -body JSON")
+	fmt.Fprint(os.Stderr, " -id INT64")
+	fmt.Fprint(os.Stderr, " -token STRING")
+	fmt.Fprintln(os.Stderr)
+
+	// Description
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, `Rename a tag (applies to every entry carrying it)`)
+
+	// Flags list
+	fmt.Fprintln(os.Stderr, `    -body JSON: `)
+	fmt.Fprintln(os.Stderr, `    -id INT64: Tag ID`)
+	fmt.Fprintln(os.Stderr, `    -token STRING: `)
+
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, "Example:")
+	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "tags update --body '{\n      \"name\": \"n2f\"\n   }' --id 8661038218069069088 --token \"Distinctio blanditiis recusandae ad.\"")
+}
+
+func tagsDeleteUsage() {
+	// Header with flags
+	fmt.Fprintf(os.Stderr, "%s [flags] tags delete", os.Args[0])
+	fmt.Fprint(os.Stderr, " -id INT64")
+	fmt.Fprint(os.Stderr, " -token STRING")
+	fmt.Fprintln(os.Stderr)
+
+	// Description
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, `Delete a tag and detach it from every entry`)
+
+	// Flags list
+	fmt.Fprintln(os.Stderr, `    -id INT64: Tag ID`)
+	fmt.Fprintln(os.Stderr, `    -token STRING: `)
+
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, "Example:")
+	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "tags delete --id 7479300308791975858 --token \"Voluptatum ducimus ea nihil.\"")
 }

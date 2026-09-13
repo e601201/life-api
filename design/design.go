@@ -162,10 +162,17 @@ var _ = Service("users", func() {
 	})
 })
 
+// tagName はタグ名の制約。EntryRequest の tags の要素と、tags.update の name で共有する。
+// 前後の空白は許さない（"go" と "go " が別のタグになるのを防ぐ）。
+func tagName() {
+	MinLength(1)
+	MaxLength(50)
+	Pattern(`^\S(.*\S)?$`)
+}
+
 // EntryRequest はクライアントが書き込めるフィールドだけを持つリクエスト型。
 // id / created_at / updated_at はサーバー側で付与する。
 // user_id は JWT から引くので、クライアントからは受け取らない。
-// tags は現状では入れない
 var EntryRequest = Type("EntryRequest", func() {
 	Description("Client-writable fields of a journal entry")
 
@@ -180,6 +187,13 @@ var EntryRequest = Type("EntryRequest", func() {
 		MinLength(1)
 	})
 	Attribute("body", String)
+	// タグは名前で受け取る。無いものはそのユーザのタグとして作られ、あるものは
+	// 紐付けだけ増える（tags サービスの list で id が分かる）。PUT では全置換なので、
+	// 省略すると全部外れる。
+	Attribute("tags", ArrayOf(String, tagName), "タグ名の一覧", func() {
+		MaxLength(20)
+		Example([]string{"go", "goa"})
+	})
 
 	Required("title", "entry_date", "kind")
 })
@@ -200,6 +214,10 @@ var Journal = Type("Journal", func() {
 	})
 	// user_id は作成時に JWT の sub から入れる（users.id）。DB では NOT NULL。
 	Attribute("user_id", Int64)
+
+	// レスポンスでは tags を必ず出す（無ければ []）。EntryRequest では任意だが、
+	// ここで Required にしないと生成コードが omitempty を付け、空のときにキーごと消える。
+	Required("tags")
 })
 
 // Service entries: 5 メソッド(POST / GET list / GET one / PUT / DELETE)。
@@ -321,6 +339,82 @@ var _ = Service("entries", func() {
 		Error("not_found")
 		HTTP(func() {
 			DELETE("/entries/{id}")
+			Response(StatusNoContent)
+			Response("not_found", StatusNotFound)
+		})
+	})
+})
+
+// TagResult は API が返すタグ（型名は Tag。Go の変数名は DSL の Tag 関数と衝突するので別にしている）。
+// entry_count は紐付いている記録の数で、0 のタグも残る（消したければ tags.delete）。
+var TagResult = Type("Tag", func() {
+	Description("A tag owned by the authenticated user")
+
+	Attribute("id", Int64)
+	Attribute("name", String, tagName)
+	Attribute("entry_count", Int, "このタグが付いている記録の数")
+
+	Required("id", "name", "entry_count")
+})
+
+// Service tags: 一覧 / 改名 / 削除。
+//
+// 作成は持たない。タグは entries の tags に名前を書いたときに暗黙に作られるので、
+// POST /tags を用意しても「名前だけのタグ」を作る用途しか無い。
+// 改名は紐付いている全ての記録に効き、削除は紐付けごと消す（記録は残る）。
+var _ = Service("tags", func() {
+	Description("Tags of the authenticated user")
+
+	Security(JWTAuth)
+	Error("unauthorized")
+	HTTP(func() {
+		Response("unauthorized", StatusUnauthorized)
+	})
+
+	Method("list", func() {
+		Description("List the authenticated user's tags with entry counts, sorted by name")
+		Payload(jwtToken)
+		Result(ArrayOf(TagResult))
+
+		HTTP(func() {
+			GET("/tags")
+			Response(StatusOK)
+		})
+	})
+
+	Method("update", func() {
+		Description("Rename a tag (applies to every entry carrying it)")
+		Payload(func() {
+			Attribute("id", Int64, "Tag ID")
+			Attribute("name", String, "新しい名前", tagName)
+			Required("id", "name")
+			jwtToken()
+		})
+		Result(TagResult)
+		// id が存在しない、または他人のものなら 404（entries と同じ扱い）
+		Error("not_found")
+		// 同じ名前のタグが既にあれば 409。統合はしない（記録の付け替えは entries 側でやる）
+		Error("conflict")
+
+		HTTP(func() {
+			PUT("/tags/{id}")
+			Response(StatusOK)
+			Response("not_found", StatusNotFound)
+			Response("conflict", StatusConflict)
+		})
+	})
+
+	Method("delete", func() {
+		Description("Delete a tag and detach it from every entry")
+		Payload(func() {
+			Attribute("id", Int64, "Tag ID")
+			Required("id")
+			jwtToken()
+		})
+		Error("not_found")
+
+		HTTP(func() {
+			DELETE("/tags/{id}")
 			Response(StatusNoContent)
 			Response("not_found", StatusNotFound)
 		})

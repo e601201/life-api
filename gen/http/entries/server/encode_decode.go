@@ -522,6 +522,14 @@ func marshalEntriesJournalToJournalResponse(v *entries.Journal) *JournalResponse
 		Title:     v.Title,
 		Body:      v.Body,
 	}
+	if v.Tags != nil {
+		res.Tags = make([]string, len(v.Tags))
+		for i, val := range v.Tags {
+			res.Tags[i] = val
+		}
+	} else {
+		res.Tags = []string{}
+	}
 
 	return res
 }

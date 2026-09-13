@@ -585,6 +585,10 @@ func unmarshalJournalResponseToEntriesJournal(v *JournalResponse) *entries.Journ
 		Title:     *v.Title,
 		Body:      v.Body,
 	}
+	res.Tags = make([]string, len(v.Tags))
+	for i, val := range v.Tags {
+		res.Tags[i] = val
+	}
 
 	return res
 }

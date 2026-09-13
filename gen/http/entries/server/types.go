@@ -22,6 +22,8 @@ type CreateRequestBody struct {
 	Kind      *string `form:"kind,omitempty" json:"kind,omitempty" xml:"kind,omitempty"`
 	Title     *string `form:"title,omitempty" json:"title,omitempty" xml:"title,omitempty"`
 	Body      *string `form:"body,omitempty" json:"body,omitempty" xml:"body,omitempty"`
+	// タグ名の一覧
+	Tags []string `form:"tags,omitempty" json:"tags,omitempty" xml:"tags,omitempty"`
 }
 
 // UpdateRequestBody is the type of the "entries" service "update" endpoint
@@ -32,6 +34,8 @@ type UpdateRequestBody struct {
 	Kind      *string `form:"kind,omitempty" json:"kind,omitempty" xml:"kind,omitempty"`
 	Title     *string `form:"title,omitempty" json:"title,omitempty" xml:"title,omitempty"`
 	Body      *string `form:"body,omitempty" json:"body,omitempty" xml:"body,omitempty"`
+	// タグ名の一覧
+	Tags []string `form:"tags,omitempty" json:"tags,omitempty" xml:"tags,omitempty"`
 }
 
 // CreateResponseBody is the type of the "entries" service "create" endpoint
@@ -46,6 +50,8 @@ type CreateResponseBody struct {
 	Kind      string  `form:"kind" json:"kind" xml:"kind"`
 	Title     string  `form:"title" json:"title" xml:"title"`
 	Body      *string `form:"body,omitempty" json:"body,omitempty" xml:"body,omitempty"`
+	// タグ名の一覧
+	Tags []string `form:"tags" json:"tags" xml:"tags"`
 }
 
 // ListResponseBody is the type of the "entries" service "list" endpoint HTTP
@@ -64,6 +70,8 @@ type GetResponseBody struct {
 	Kind      string  `form:"kind" json:"kind" xml:"kind"`
 	Title     string  `form:"title" json:"title" xml:"title"`
 	Body      *string `form:"body,omitempty" json:"body,omitempty" xml:"body,omitempty"`
+	// タグ名の一覧
+	Tags []string `form:"tags" json:"tags" xml:"tags"`
 }
 
 // UpdateResponseBody is the type of the "entries" service "update" endpoint
@@ -78,6 +86,8 @@ type UpdateResponseBody struct {
 	Kind      string  `form:"kind" json:"kind" xml:"kind"`
 	Title     string  `form:"title" json:"title" xml:"title"`
 	Body      *string `form:"body,omitempty" json:"body,omitempty" xml:"body,omitempty"`
+	// タグ名の一覧
+	Tags []string `form:"tags" json:"tags" xml:"tags"`
 }
 
 // CreateUnauthorizedResponseBody is the type of the "entries" service "create"
@@ -235,6 +245,8 @@ type JournalResponse struct {
 	Kind      string  `form:"kind" json:"kind" xml:"kind"`
 	Title     string  `form:"title" json:"title" xml:"title"`
 	Body      *string `form:"body,omitempty" json:"body,omitempty" xml:"body,omitempty"`
+	// タグ名の一覧
+	Tags []string `form:"tags" json:"tags" xml:"tags"`
 }
 
 // NewCreateResponseBody builds the HTTP response body from the result of the
@@ -249,6 +261,14 @@ func NewCreateResponseBody(res *entries.CreateResult) *CreateResponseBody {
 		Kind:      res.Kind,
 		Title:     res.Title,
 		Body:      res.Body,
+	}
+	if res.Tags != nil {
+		body.Tags = make([]string, len(res.Tags))
+		for i, val := range res.Tags {
+			body.Tags[i] = val
+		}
+	} else {
+		body.Tags = []string{}
 	}
 	return body
 }
@@ -280,6 +300,14 @@ func NewGetResponseBody(res *entries.Journal) *GetResponseBody {
 		Title:     res.Title,
 		Body:      res.Body,
 	}
+	if res.Tags != nil {
+		body.Tags = make([]string, len(res.Tags))
+		for i, val := range res.Tags {
+			body.Tags[i] = val
+		}
+	} else {
+		body.Tags = []string{}
+	}
 	return body
 }
 
@@ -295,6 +323,14 @@ func NewUpdateResponseBody(res *entries.Journal) *UpdateResponseBody {
 		Kind:      res.Kind,
 		Title:     res.Title,
 		Body:      res.Body,
+	}
+	if res.Tags != nil {
+		body.Tags = make([]string, len(res.Tags))
+		for i, val := range res.Tags {
+			body.Tags[i] = val
+		}
+	} else {
+		body.Tags = []string{}
 	}
 	return body
 }
@@ -419,6 +455,12 @@ func NewCreatePayload(body *CreateRequestBody, token *string) *entries.CreatePay
 		Title:     *body.Title,
 		Body:      body.Body,
 	}
+	if body.Tags != nil {
+		v.Tags = make([]string, len(body.Tags))
+		for i, val := range body.Tags {
+			v.Tags[i] = val
+		}
+	}
 	v.Token = token
 
 	return v
@@ -450,6 +492,12 @@ func NewUpdatePayload(body *UpdateRequestBody, id int64, token *string) *entries
 		Kind:      *body.Kind,
 		Title:     *body.Title,
 		Body:      body.Body,
+	}
+	if body.Tags != nil {
+		v.Tags = make([]string, len(body.Tags))
+		for i, val := range body.Tags {
+			v.Tags[i] = val
+		}
 	}
 	v.ID = id
 	v.Token = token
@@ -490,6 +538,18 @@ func ValidateCreateRequestBody(body *CreateRequestBody) (err error) {
 			err = goa.MergeErrors(err, goa.InvalidLengthError("body.title", *body.Title, utf8.RuneCountInString(*body.Title), 1, true))
 		}
 	}
+	if len(body.Tags) > 20 {
+		err = goa.MergeErrors(err, goa.InvalidLengthError("body.tags", body.Tags, len(body.Tags), 20, false))
+	}
+	for _, e := range body.Tags {
+		err = goa.MergeErrors(err, goa.ValidatePattern("body.tags[*]", e, "^\\S(.*\\S)?$"))
+		if utf8.RuneCountInString(e) < 1 {
+			err = goa.MergeErrors(err, goa.InvalidLengthError("body.tags[*]", e, utf8.RuneCountInString(e), 1, true))
+		}
+		if utf8.RuneCountInString(e) > 50 {
+			err = goa.MergeErrors(err, goa.InvalidLengthError("body.tags[*]", e, utf8.RuneCountInString(e), 50, false))
+		}
+	}
 	return
 }
 
@@ -515,6 +575,18 @@ func ValidateUpdateRequestBody(body *UpdateRequestBody) (err error) {
 	if body.Title != nil {
 		if utf8.RuneCountInString(*body.Title) < 1 {
 			err = goa.MergeErrors(err, goa.InvalidLengthError("body.title", *body.Title, utf8.RuneCountInString(*body.Title), 1, true))
+		}
+	}
+	if len(body.Tags) > 20 {
+		err = goa.MergeErrors(err, goa.InvalidLengthError("body.tags", body.Tags, len(body.Tags), 20, false))
+	}
+	for _, e := range body.Tags {
+		err = goa.MergeErrors(err, goa.ValidatePattern("body.tags[*]", e, "^\\S(.*\\S)?$"))
+		if utf8.RuneCountInString(e) < 1 {
+			err = goa.MergeErrors(err, goa.InvalidLengthError("body.tags[*]", e, utf8.RuneCountInString(e), 1, true))
+		}
+		if utf8.RuneCountInString(e) > 50 {
+			err = goa.MergeErrors(err, goa.InvalidLengthError("body.tags[*]", e, utf8.RuneCountInString(e), 50, false))
 		}
 	}
 	return

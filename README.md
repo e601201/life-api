@@ -98,13 +98,13 @@ db/migrations/000002_create_tags.down.sql
 
 ### テスト
 
-`entries` の CRUD と `users` は実際の PostgreSQL に対して流す。確かめたいものが SQL 側
+`entries` の CRUD、`users`、`tags` は実際の PostgreSQL に対して流す。確かめたいものが SQL 側
 （`date` へのキャスト、`RETURNING`、`pgx.ErrNoRows`、UNIQUE / NOT NULL 制約、`user_id` での絞り込み、
 インデックスに合わせた並び）に寄っているため、DB をモックすると肝心なところが残らない。`http_test.go` は Goa の生成コードごと
 `httptest` で立てて、Authorization ヘッダ → 401 / `user_id` の流れを HTTP で確かめる。
 JWT の発行・検証（`auth_test.go`）だけは DB を使わない。
 
-接続先は `TEST_DATABASE_URL` で渡す。**テストは `entries` と `users` テーブルを空にする**ので、
+接続先は `TEST_DATABASE_URL` で渡す。**テストは `entries` / `users` / `tags` テーブルを空にする**ので、
 開発用の DB とは別のデータベースを指すこと。`DATABASE_URL` ではなく専用の変数を
 見ているのは、取り違えて開発中のデータを消さないため。
 
@@ -137,6 +137,21 @@ DSL では `JWTSecurity("jwt")` を定義し、`entries` サービスと `users.
 付けている。Token 属性は `Required` にしていない。必須にするとヘッダ無しが Goa のデコード段階で
 400 になるため、空のまま `JWTAuth` まで通して 401 にしている。
 
+### tags
+
+タグは `entries` の `tags`（名前の配列）で付け外しする。無い名前はそのユーザのタグとして作られ、
+ある名前は紐付けだけ増える。PUT は全置換なので、`tags` を省くと全部外れる（`body` と同じ扱い）。
+レスポンスの `tags` は名前順で、無ければ `[]`。
+
+`tags` サービスは一覧（`GET /tags`、件数付き・名前順）・改名（`PUT /tags/{id}`、全記録に反映）・
+削除（`DELETE /tags/{id}`、紐付けごと消え、記録は残る）の 3 つ。作成は entries 経由で暗黙に行うので
+`POST /tags` は無い。紐付けの無くなったタグは 0 件のまま残る（消したければ delete）。
+
+- 名前は 1〜50 文字、前後に空白なし、大文字小文字は区別する。同じユーザの中で一意で、既にある名前への改名は 409
+- テーブルは `tags`（`user_id` + `name` で一意）と `entry_tags`（中間テーブル、双方向に CASCADE）。
+  タグ検索（#45）用に `(tag_id, entry_id)` のインデックスも張ってある
+- 記録の作成・更新はトランザクションで、名前の upsert と紐付けを 1 文でやる（`entries.go` の `setTags`）
+
 ### 打鍵確認（curl）
 
 entries の CRUD は `entries` テーブルへの読み書き（`entries.go`）。プロセスを再起動しても
@@ -163,9 +178,9 @@ TOKEN=$(curl -s -H 'Content-Type: application/json' localhost:8080/users/login \
 curl -H "Authorization: Bearer $TOKEN" localhost:8080/users/me
 
 # 作成（id・created_at・updated_at はサーバー側で付与。Location ヘッダに新リソースのパスが入る）
-# user_id はリクエストでは受け取らず、トークンの sub から入る
+# user_id はリクエストでは受け取らず、トークンの sub から入る。tags は任意で、名前順に返る
 curl -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' localhost:8080/entries \
-  -d '{"title":"Goa入門","entry_date":"2026-08-31","kind":"til","body":"本文"}'
+  -d '{"title":"Goa入門","entry_date":"2026-08-31","kind":"til","body":"本文","tags":["goa","go"]}'
 
 # 一覧（既定 10 件）/ 単体取得
 curl -H "Authorization: Bearer $TOKEN" localhost:8080/entries
@@ -173,9 +188,15 @@ curl -H "Authorization: Bearer $TOKEN" 'localhost:8080/entries?limit=3&offset=10
 curl -H "Authorization: Bearer $TOKEN" localhost:8080/entries/1
 
 # 更新（created_at と user_id は維持され、updated_at だけ進む。
-#  body を省くと NULL に戻る＝PUT なので送った内容で全体を置き換える）
+#  body や tags を省くと NULL / [] に戻る＝PUT なので送った内容で全体を置き換える）
 curl -X PUT -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' localhost:8080/entries/1 \
-  -d '{"title":"Goa入門(更新)","entry_date":"2026-08-31","kind":"til","body":"追記"}'
+  -d '{"title":"Goa入門(更新)","entry_date":"2026-08-31","kind":"til","body":"追記","tags":["goa"]}'
+
+# タグの一覧（件数付き）/ 改名（全記録に反映）/ 削除（紐付けごと消え、記録は残る）
+curl -H "Authorization: Bearer $TOKEN" localhost:8080/tags
+curl -X PUT -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' localhost:8080/tags/1 \
+  -d '{"name":"golang"}'
+curl -i -X DELETE -H "Authorization: Bearer $TOKEN" localhost:8080/tags/1
 
 # 削除（204 No Content）
 curl -i -X DELETE -H "Authorization: Bearer $TOKEN" localhost:8080/entries/1

@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -15,12 +16,14 @@ import (
 
 	entries "github.com/e601201/life-api/gen/entries"
 	entriessvr "github.com/e601201/life-api/gen/http/entries/server"
+	tagssvr "github.com/e601201/life-api/gen/http/tags/server"
 	userssvr "github.com/e601201/life-api/gen/http/users/server"
+	tags "github.com/e601201/life-api/gen/tags"
 	users "github.com/e601201/life-api/gen/users"
 	goahttp "goa.design/goa/v3/http"
 )
 
-// newTestServer は users と entries を cmd/life/http.go と同じ生成コードでマウントした
+// newTestServer は users / entries / tags を cmd/life/http.go と同じ生成コードでマウントした
 // サーバを立てる。エラーの整形は Goa の既定（宣言したエラーは design のステータス）。
 func newTestServer(t *testing.T) *httptest.Server {
 	t.Helper()
@@ -36,6 +39,9 @@ func newTestServer(t *testing.T) *httptest.Server {
 	entriesServer := entriessvr.New(entries.NewEndpoints(NewEntries(testPool, testAuth)), mux,
 		goahttp.RequestDecoder, goahttp.ResponseEncoder, eh, ef)
 	entriessvr.Mount(mux, entriesServer)
+	tagsServer := tagssvr.New(tags.NewEndpoints(NewTags(testPool, testAuth)), mux,
+		goahttp.RequestDecoder, goahttp.ResponseEncoder, eh, ef)
+	tagssvr.Mount(mux, tagsServer)
 
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
@@ -46,6 +52,22 @@ func newTestServer(t *testing.T) *httptest.Server {
 // オブジェクトでないとき（一覧の配列、204 の空）は nil を返す。
 // authorization が空でなければそのまま Authorization ヘッダに載せる。
 func call(t *testing.T, srv *httptest.Server, method, path, authorization string, body any) (*http.Response, map[string]any) {
+	t.Helper()
+	resp, parsed := callRaw(t, srv, method, path, authorization, body)
+	obj, _ := parsed.(map[string]any)
+	return resp, obj
+}
+
+// callList は一覧（JSON 配列）を返すエンドポイント用。
+func callList(t *testing.T, srv *httptest.Server, method, path, authorization string) (*http.Response, []any) {
+	t.Helper()
+	resp, parsed := callRaw(t, srv, method, path, authorization, nil)
+	list, _ := parsed.([]any)
+	return resp, list
+}
+
+// callRaw はリクエストを投げ、ボディを any にデコードして返す（空なら nil）。
+func callRaw(t *testing.T, srv *httptest.Server, method, path, authorization string, body any) (*http.Response, any) {
 	t.Helper()
 	var buf io.Reader
 	if body != nil {
@@ -81,8 +103,7 @@ func call(t *testing.T, srv *httptest.Server, method, path, authorization string
 			t.Fatalf("%s %s: body is not JSON: %s", method, path, raw)
 		}
 	}
-	obj, _ := parsed.(map[string]any)
-	return resp, obj
+	return resp, parsed
 }
 
 // requireStatus はステータスと、エラーなら name も見る。
@@ -251,22 +272,9 @@ func TestHTTPEntriesScopedToUser(t *testing.T) {
 	}
 
 	// alice の一覧には alice の分だけ。
-	req, err := http.NewRequest(http.MethodGet, srv.URL+"/entries", nil)
-	if err != nil {
-		t.Fatalf("new request: %v", err)
-	}
-	req.Header.Set("Authorization", aliceAuth)
-	resp, err := srv.Client().Do(req)
-	if err != nil {
-		t.Fatalf("list: %v", err)
-	}
-	defer resp.Body.Close()
-	var list []map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&list); err != nil {
-		t.Fatalf("decode list: %v", err)
-	}
-	if len(list) != 1 || list[0]["user_id"] != aliceID {
-		t.Errorf("alice の一覧 = %v, alice の 1 件だけであること", list)
+	resp, list := callList(t, srv, http.MethodGet, "/entries", aliceAuth)
+	if resp.StatusCode != http.StatusOK || len(list) != 1 || list[0].(map[string]any)["user_id"] != aliceID {
+		t.Errorf("alice の一覧 = %v (status %d), alice の 1 件だけであること", list, resp.StatusCode)
 	}
 
 	// alice から bob の id は 404（存在しない id と同じ）。
@@ -285,4 +293,83 @@ func TestHTTPEntriesScopedToUser(t *testing.T) {
 	if body["title"] != "bob の記録" {
 		t.Errorf("title = %v, want %q", body["title"], "bob の記録")
 	}
+}
+
+func TestHTTPTags(t *testing.T) {
+	srv := newTestServer(t)
+	auth, _ := login(t, srv, "alice@example.com", "correct horse")
+
+	// タグ無しの記録は "tags": [] で返る（キーが消えたり null になったりしない）。
+	resp, body := call(t, srv, http.MethodPost, "/entries", auth,
+		map[string]any{"title": "タグなし", "entry_date": "2026-09-01", "kind": "til"})
+	requireStatus(t, resp, body, http.StatusCreated, "")
+	if tagsVal, ok := body["tags"].([]any); !ok || len(tagsVal) != 0 {
+		t.Errorf("tags = %v (%T), want []", body["tags"], body["tags"])
+	}
+
+	// タグ付きで作る。名前順で返る。
+	resp, body = call(t, srv, http.MethodPost, "/entries", auth,
+		map[string]any{"title": "タグあり", "entry_date": "2026-09-02", "kind": "til", "tags": []string{"goa", "go"}})
+	requireStatus(t, resp, body, http.StatusCreated, "")
+	entryPath := resp.Header.Get("Location")
+	if got := body["tags"]; !equalJSONStrings(got, "go", "goa") {
+		t.Errorf("tags = %v, want [go goa]", got)
+	}
+
+	// 一覧に件数付きで出る。
+	resp, list := callList(t, srv, http.MethodGet, "/tags", auth)
+	if resp.StatusCode != http.StatusOK || len(list) != 2 {
+		t.Fatalf("GET /tags: status %d, list = %v", resp.StatusCode, list)
+	}
+	first := list[0].(map[string]any)
+	if first["name"] != "go" || first["entry_count"] != float64(1) {
+		t.Errorf("tags[0] = %v, want name=go entry_count=1", first)
+	}
+	goID := int64(first["id"].(float64))
+
+	// 改名すると記録側でも名前が変わる。
+	resp, body = call(t, srv, http.MethodPut, fmt.Sprintf("/tags/%d", goID), auth, map[string]string{"name": "golang"})
+	requireStatus(t, resp, body, http.StatusOK, "")
+	resp, body = call(t, srv, http.MethodGet, entryPath, auth, nil)
+	requireStatus(t, resp, body, http.StatusOK, "")
+	if got := body["tags"]; !equalJSONStrings(got, "goa", "golang") {
+		t.Errorf("tags after rename = %v, want [goa golang]", got)
+	}
+
+	// 既にある名前への改名は 409。
+	resp, body = call(t, srv, http.MethodPut, fmt.Sprintf("/tags/%d", goID), auth, map[string]string{"name": "goa"})
+	requireStatus(t, resp, body, http.StatusConflict, "conflict")
+
+	// バリデーション: 前後の空白や空文字は 400。
+	for _, name := range []string{"", " go", "go "} {
+		resp, body = call(t, srv, http.MethodPut, fmt.Sprintf("/tags/%d", goID), auth, map[string]string{"name": name})
+		requireStatus(t, resp, body, http.StatusBadRequest, "")
+	}
+
+	// 削除すると記録から外れ、記録は残る。
+	resp, body = call(t, srv, http.MethodDelete, fmt.Sprintf("/tags/%d", goID), auth, nil)
+	requireStatus(t, resp, body, http.StatusNoContent, "")
+	resp, body = call(t, srv, http.MethodGet, entryPath, auth, nil)
+	requireStatus(t, resp, body, http.StatusOK, "")
+	if got := body["tags"]; !equalJSONStrings(got, "goa") {
+		t.Errorf("tags after delete = %v, want [goa]", got)
+	}
+
+	// /tags も JWT が要る。
+	resp, body = call(t, srv, http.MethodGet, "/tags", "", nil)
+	requireStatus(t, resp, body, http.StatusUnauthorized, "unauthorized")
+}
+
+// equalJSONStrings は JSON からデコードした []any が want と同じ文字列列かを見る。
+func equalJSONStrings(got any, want ...string) bool {
+	list, ok := got.([]any)
+	if !ok || len(list) != len(want) {
+		return false
+	}
+	for i, w := range want {
+		if list[i] != w {
+			return false
+		}
+	}
+	return true
 }

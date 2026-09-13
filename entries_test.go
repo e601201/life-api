@@ -6,7 +6,7 @@ package life
 //
 // 接続先は TEST_DATABASE_URL で渡す。未設定なら skip するので、DB の無い環境でも
 // go test ./... は通る。DATABASE_URL ではなく専用の変数を見るのは、テストが
-// entries と users テーブルを空にするため。開発用の DB を取り違えて消さないようにしている。
+// entries / users / tags テーブルを空にするため。開発用の DB を取り違えて消さないようにしている。
 //
 //	docker compose exec db psql -U life -d postgres -c 'CREATE DATABASE life_test'
 //	TEST_DATABASE_URL='postgres://life:life@localhost:5432/life_test?sslmode=disable' go test ./...
@@ -17,6 +17,8 @@ import (
 	"fmt"
 	"os"
 	"testing"
+
+	"slices"
 
 	"github.com/e601201/life-api/db"
 	entries "github.com/e601201/life-api/gen/entries"
@@ -80,12 +82,12 @@ func requireDB(t *testing.T) {
 }
 
 // resetTables はテーブルを空にし、id の採番も 1 に戻す。テストごとに同じ前提から
-// 始められる。entries は users を FK で参照しているので、まとめて 1 文で消す。
+// 始められる。FK で互いに参照しているので、まとめて 1 文で消す。
 func resetTables(t *testing.T) context.Context {
 	t.Helper()
 	requireDB(t)
 	ctx := context.Background()
-	if _, err := testPool.Exec(ctx, "TRUNCATE entries, users RESTART IDENTITY"); err != nil {
+	if _, err := testPool.Exec(ctx, "TRUNCATE entries, users, tags, entry_tags RESTART IDENTITY"); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 	return ctx
@@ -341,6 +343,165 @@ func TestCreateWithoutBody(t *testing.T) {
 	}
 	if res.Body != nil {
 		t.Errorf("body = %q, want nil", *res.Body)
+	}
+	// tags も省略できる。レスポンスでは nil（JSON の null）ではなく空スライスで返る。
+	if res.Tags == nil || len(res.Tags) != 0 {
+		t.Errorf("tags = %v, want 空スライス", res.Tags)
+	}
+}
+
+// tagNames は失敗メッセージ用に tags テーブルの中身を (user_id:name) の一覧にする。
+func tagNames(t *testing.T, ctx context.Context) []string {
+	t.Helper()
+	rows, err := testPool.Query(ctx, `SELECT user_id, name FROM tags ORDER BY user_id, name`)
+	if err != nil {
+		t.Fatalf("select tags: %v", err)
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var uid int64
+		var name string
+		if err := rows.Scan(&uid, &name); err != nil {
+			t.Fatalf("scan: %v", err)
+		}
+		out = append(out, fmt.Sprintf("%d:%s", uid, name))
+	}
+	return out
+}
+
+func TestCreateWithTags(t *testing.T) {
+	svc, ctx := newService(t)
+
+	// 順不同・重複ありで渡しても、名前順・重複なしで返る。
+	res, err := svc.Create(ctx, &entries.CreatePayload{
+		EntryDate: "2026-09-01",
+		Kind:      "til",
+		Title:     "タグ付き",
+		Tags:      []string{"goa", "go", "goa", "aws"},
+	})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	want := []string{"aws", "go", "goa"}
+	if !slices.Equal(res.Tags, want) {
+		t.Errorf("tags = %v, want %v", res.Tags, want)
+	}
+
+	// 読み直しても同じ。tags テーブルには 3 行だけ（重複分は作られない）。
+	got, err := svc.Get(ctx, &entries.GetPayload{ID: *res.ID})
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if !slices.Equal(got.Tags, want) {
+		t.Errorf("get tags = %v, want %v", got.Tags, want)
+	}
+	if names := tagNames(t, ctx); len(names) != 3 {
+		t.Errorf("tags テーブル = %v, want 3 行", names)
+	}
+}
+
+func TestTagsAreReusedAcrossEntries(t *testing.T) {
+	svc, ctx := newService(t)
+
+	// 同じ名前を別の記録に付けても、タグの行は増えず紐付けだけ増える。
+	for _, title := range []string{"1 件目", "2 件目"} {
+		if _, err := svc.Create(ctx, &entries.CreatePayload{
+			EntryDate: "2026-09-01", Kind: "til", Title: title, Tags: []string{"go"},
+		}); err != nil {
+			t.Fatalf("create %q: %v", title, err)
+		}
+	}
+	if names := tagNames(t, ctx); len(names) != 1 {
+		t.Errorf("tags テーブル = %v, want 1 行", names)
+	}
+	var links int
+	if err := testPool.QueryRow(ctx, `SELECT count(*) FROM entry_tags`).Scan(&links); err != nil {
+		t.Fatalf("count entry_tags: %v", err)
+	}
+	if links != 2 {
+		t.Errorf("entry_tags = %d 行, want 2", links)
+	}
+}
+
+func TestUpdateReplacesTags(t *testing.T) {
+	svc, ctx := newService(t)
+
+	created, err := svc.Create(ctx, &entries.CreatePayload{
+		EntryDate: "2026-09-01", Kind: "til", Title: "更新前", Tags: []string{"go", "aws"},
+	})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	// go を残して aws を外し、goa を足す。
+	got, err := svc.Update(ctx, &entries.UpdatePayload{
+		ID: *created.ID, EntryDate: "2026-09-01", Kind: "til", Title: "更新後", Tags: []string{"goa", "go"},
+	})
+	if err != nil {
+		t.Fatalf("update: %v", err)
+	}
+	if want := []string{"go", "goa"}; !slices.Equal(got.Tags, want) {
+		t.Errorf("tags = %v, want %v", got.Tags, want)
+	}
+
+	// 外した aws のタグ自体は残る（消すのは tags.delete の仕事）。
+	if names := tagNames(t, ctx); !slices.Contains(names, "1:aws") {
+		t.Errorf("tags テーブル = %v, aws が消えている", names)
+	}
+
+	// PUT は全置換なので、tags を省くと全部外れる（body と同じ扱い）。
+	got, err = svc.Update(ctx, &entries.UpdatePayload{
+		ID: *created.ID, EntryDate: "2026-09-01", Kind: "til", Title: "タグなし",
+	})
+	if err != nil {
+		t.Fatalf("update: %v", err)
+	}
+	if got.Tags == nil || len(got.Tags) != 0 {
+		t.Errorf("tags = %v, want 空スライス", got.Tags)
+	}
+}
+
+func TestTagsScopedToUser(t *testing.T) {
+	svc, alice := newService(t)
+	bob := asOtherUser(t, alice)
+
+	// 同じ名前でもユーザが違えば別のタグ（tags_user_id_name_key は user_id 込み）。
+	for _, ctx := range []context.Context{alice, bob} {
+		if _, err := svc.Create(ctx, &entries.CreatePayload{
+			EntryDate: "2026-09-01", Kind: "til", Title: "同じ名前", Tags: []string{"go"},
+		}); err != nil {
+			t.Fatalf("create: %v", err)
+		}
+	}
+	if names := tagNames(t, alice); !slices.Equal(names, []string{"1:go", "2:go"}) {
+		t.Errorf("tags テーブル = %v, want [1:go 2:go]", names)
+	}
+}
+
+func TestDeleteEntryKeepsTags(t *testing.T) {
+	svc, ctx := newService(t)
+
+	created, err := svc.Create(ctx, &entries.CreatePayload{
+		EntryDate: "2026-09-01", Kind: "til", Title: "消す", Tags: []string{"go"},
+	})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if err := svc.Delete(ctx, &entries.DeletePayload{ID: *created.ID}); err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+
+	// 紐付けは CASCADE で消え、タグは残る。
+	var links int
+	if err := testPool.QueryRow(ctx, `SELECT count(*) FROM entry_tags`).Scan(&links); err != nil {
+		t.Fatalf("count entry_tags: %v", err)
+	}
+	if links != 0 {
+		t.Errorf("entry_tags = %d 行, want 0", links)
+	}
+	if names := tagNames(t, ctx); len(names) != 1 {
+		t.Errorf("tags テーブル = %v, want 1 行", names)
 	}
 }
 

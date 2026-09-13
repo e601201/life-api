@@ -59,6 +59,8 @@ type CreatePayload struct {
 	Kind      string
 	Title     string
 	Body      *string
+	// タグ名の一覧
+	Tags []string
 }
 
 // CreateResult is the result type of the entries service create method.
@@ -74,6 +76,8 @@ type CreateResult struct {
 	Kind      string
 	Title     string
 	Body      *string
+	// タグ名の一覧
+	Tags []string
 }
 
 // DeletePayload is the payload type of the entries service delete method.
@@ -103,6 +107,8 @@ type Journal struct {
 	Kind      string
 	Title     string
 	Body      *string
+	// タグ名の一覧
+	Tags []string
 }
 
 // ListPayload is the payload type of the entries service list method.
@@ -126,6 +132,8 @@ type UpdatePayload struct {
 	Kind      string
 	Title     string
 	Body      *string
+	// タグ名の一覧
+	Tags []string
 }
 
 // MakeUnauthorized builds a goa.ServiceError from an error.

@@ -54,6 +54,9 @@ paths:
                                       entry_date: "1987-08-29"
                                       id: 3312195076812813890
                                       kind: til
+                                      tags:
+                                        - go
+                                        - goa
                                       title: j
                                       updated_at: "2004-10-20T00:36:43Z"
                                       user_id: 8220775752495052168
@@ -62,6 +65,9 @@ paths:
                                       entry_date: "1987-08-29"
                                       id: 3312195076812813890
                                       kind: til
+                                      tags:
+                                        - go
+                                        - goa
                                       title: j
                                       updated_at: "2004-10-20T00:36:43Z"
                                       user_id: 8220775752495052168
@@ -70,6 +76,9 @@ paths:
                                       entry_date: "1987-08-29"
                                       id: 3312195076812813890
                                       kind: til
+                                      tags:
+                                        - go
+                                        - goa
                                       title: j
                                       updated_at: "2004-10-20T00:36:43Z"
                                       user_id: 8220775752495052168
@@ -78,6 +87,9 @@ paths:
                                       entry_date: "1987-08-29"
                                       id: 3312195076812813890
                                       kind: til
+                                      tags:
+                                        - go
+                                        - goa
                                       title: j
                                       updated_at: "2004-10-20T00:36:43Z"
                                       user_id: 8220775752495052168
@@ -87,6 +99,9 @@ paths:
                                   entry_date: "1987-08-29"
                                   id: 3312195076812813890
                                   kind: til
+                                  tags:
+                                    - go
+                                    - goa
                                   title: j
                                   updated_at: "2004-10-20T00:36:43Z"
                                   user_id: 8220775752495052168
@@ -95,6 +110,9 @@ paths:
                                   entry_date: "1987-08-29"
                                   id: 3312195076812813890
                                   kind: til
+                                  tags:
+                                    - go
+                                    - goa
                                   title: j
                                   updated_at: "2004-10-20T00:36:43Z"
                                   user_id: 8220775752495052168
@@ -103,6 +121,9 @@ paths:
                                   entry_date: "1987-08-29"
                                   id: 3312195076812813890
                                   kind: til
+                                  tags:
+                                    - go
+                                    - goa
                                   title: j
                                   updated_at: "2004-10-20T00:36:43Z"
                                   user_id: 8220775752495052168
@@ -111,6 +132,9 @@ paths:
                                   entry_date: "1987-08-29"
                                   id: 3312195076812813890
                                   kind: til
+                                  tags:
+                                    - go
+                                    - goa
                                   title: j
                                   updated_at: "2004-10-20T00:36:43Z"
                                   user_id: 8220775752495052168
@@ -139,6 +163,9 @@ paths:
                             body: Temporibus neque cumque fuga sit quae esse.
                             entry_date: "1994-04-12"
                             kind: diary
+                            tags:
+                                - go
+                                - goa
                             title: u
             responses:
                 "201":
@@ -161,6 +188,9 @@ paths:
                                 entry_date: "1970-02-24"
                                 id: 1587168276706967770
                                 kind: til
+                                tags:
+                                    - go
+                                    - goa
                                 title: ri
                                 updated_at: "2011-10-20T03:00:30Z"
                                 user_id: 535544025447781906
@@ -237,6 +267,9 @@ paths:
                                 entry_date: "1975-06-04"
                                 id: 1508954127712631977
                                 kind: til
+                                tags:
+                                    - go
+                                    - goa
                                 title: tyz
                                 updated_at: "2001-10-21T09:21:16Z"
                                 user_id: 1741871451947034476
@@ -282,6 +315,9 @@ paths:
                             body: Natus maiores quasi.
                             entry_date: "1998-12-26"
                             kind: til
+                            tags:
+                                - go
+                                - goa
                             title: r
             responses:
                 "200":
@@ -296,6 +332,9 @@ paths:
                                 entry_date: "1976-07-08"
                                 id: 6373734996410084234
                                 kind: diary
+                                tags:
+                                    - go
+                                    - goa
                                 title: "7"
                                 updated_at: "1986-10-15T18:33:16Z"
                                 user_id: 3366940458952493031
@@ -336,6 +375,148 @@ paths:
                         application/vnd.goa.error:
                             schema:
                                 $ref: '#/components/schemas/Error'
+    /tags:
+        get:
+            tags:
+                - tags
+            summary: list tags
+            description: List the authenticated user's tags with entry counts, sorted by name
+            operationId: tags#list
+            responses:
+                "200":
+                    description: OK response.
+                    content:
+                        application/json:
+                            schema:
+                                type: array
+                                items:
+                                    $ref: '#/components/schemas/Tag'
+                                example:
+                                    - entry_count: 9078299880832848833
+                                      id: 761552026747256846
+                                      name: "n"
+                                    - entry_count: 9078299880832848833
+                                      id: 761552026747256846
+                                      name: "n"
+                                    - entry_count: 9078299880832848833
+                                      id: 761552026747256846
+                                      name: "n"
+                                    - entry_count: 9078299880832848833
+                                      id: 761552026747256846
+                                      name: "n"
+                            example:
+                                - entry_count: 9078299880832848833
+                                  id: 761552026747256846
+                                  name: "n"
+                                - entry_count: 9078299880832848833
+                                  id: 761552026747256846
+                                  name: "n"
+                                - entry_count: 9078299880832848833
+                                  id: 761552026747256846
+                                  name: "n"
+                                - entry_count: 9078299880832848833
+                                  id: 761552026747256846
+                                  name: "n"
+                "401":
+                    description: 'unauthorized: Unauthorized response.'
+                    content:
+                        application/vnd.goa.error:
+                            schema:
+                                $ref: '#/components/schemas/Error'
+            security:
+                - jwt_header_Authorization: []
+    /tags/{id}:
+        delete:
+            tags:
+                - tags
+            summary: delete tags
+            description: Delete a tag and detach it from every entry
+            operationId: tags#delete
+            parameters:
+                - name: id
+                  in: path
+                  description: Tag ID
+                  required: true
+                  schema:
+                    type: integer
+                    description: Tag ID
+                    example: 7479300308791975858
+                    format: int64
+                  example: 5586897858818698533
+            responses:
+                "204":
+                    description: No Content response.
+                "401":
+                    description: 'unauthorized: Unauthorized response.'
+                    content:
+                        application/vnd.goa.error:
+                            schema:
+                                $ref: '#/components/schemas/Error'
+                "404":
+                    description: 'not_found: Not Found response.'
+                    content:
+                        application/vnd.goa.error:
+                            schema:
+                                $ref: '#/components/schemas/Error'
+            security:
+                - jwt_header_Authorization: []
+        put:
+            tags:
+                - tags
+            summary: update tags
+            description: Rename a tag (applies to every entry carrying it)
+            operationId: tags#update
+            parameters:
+                - name: id
+                  in: path
+                  description: Tag ID
+                  required: true
+                  schema:
+                    type: integer
+                    description: Tag ID
+                    example: 8661038218069069088
+                    format: int64
+                  example: 1607359115085564244
+            requestBody:
+                description: Request body for update.
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateRequestBody'
+                        example:
+                            name: n2f
+            responses:
+                "200":
+                    description: OK response.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Tag'
+                            example:
+                                entry_count: 6068553622870128052
+                                id: 1371118624363576467
+                                name: km
+                "401":
+                    description: 'unauthorized: Unauthorized response.'
+                    content:
+                        application/vnd.goa.error:
+                            schema:
+                                $ref: '#/components/schemas/Error'
+                "404":
+                    description: 'not_found: Not Found response.'
+                    content:
+                        application/vnd.goa.error:
+                            schema:
+                                $ref: '#/components/schemas/Error'
+                "409":
+                    description: 'conflict: Conflict response.'
+                    content:
+                        application/vnd.goa.error:
+                            schema:
+                                $ref: '#/components/schemas/Error'
+            security:
+                - jwt_header_Authorization: []
     /users:
         post:
             tags:
@@ -455,6 +636,19 @@ components:
                     enum:
                         - til
                         - diary
+                tags:
+                    type: array
+                    items:
+                        type: string
+                        example: co
+                        pattern: ^\S(.*\S)?$
+                        minLength: 1
+                        maxLength: 50
+                    description: タグ名の一覧
+                    example:
+                        - go
+                        - goa
+                    maxItems: 20
                 title:
                     type: string
                     example: u
@@ -464,6 +658,9 @@ components:
                 body: Temporibus neque cumque fuga sit quae esse.
                 entry_date: "1994-04-12"
                 kind: diary
+                tags:
+                    - go
+                    - goa
                 title: u
             required:
                 - title
@@ -494,6 +691,19 @@ components:
                     enum:
                         - til
                         - diary
+                tags:
+                    type: array
+                    items:
+                        type: string
+                        example: k4
+                        pattern: ^\S(.*\S)?$
+                        minLength: 1
+                        maxLength: 50
+                    description: タグ名の一覧
+                    example:
+                        - go
+                        - goa
+                    maxItems: 20
                 title:
                     type: string
                     example: ri
@@ -512,10 +722,14 @@ components:
                 entry_date: "1970-02-24"
                 id: 1587168276706967770
                 kind: til
+                tags:
+                    - go
+                    - goa
                 title: ri
                 updated_at: "2011-10-20T03:00:30Z"
                 user_id: 535544025447781906
             required:
+                - tags
                 - title
                 - entry_date
                 - kind
@@ -608,6 +822,19 @@ components:
                     enum:
                         - til
                         - diary
+                tags:
+                    type: array
+                    items:
+                        type: string
+                        example: s
+                        pattern: ^\S(.*\S)?$
+                        minLength: 1
+                        maxLength: 50
+                    description: タグ名の一覧
+                    example:
+                        - go
+                        - goa
+                    maxItems: 20
                 title:
                     type: string
                     example: j
@@ -627,10 +854,14 @@ components:
                 entry_date: "1987-08-29"
                 id: 3312195076812813890
                 kind: til
+                tags:
+                    - go
+                    - goa
                 title: j
                 updated_at: "2004-10-20T00:36:43Z"
                 user_id: 8220775752495052168
             required:
+                - tags
                 - title
                 - entry_date
                 - kind
@@ -651,6 +882,33 @@ components:
             required:
                 - email
                 - password
+        Tag:
+            type: object
+            properties:
+                entry_count:
+                    type: integer
+                    description: このタグが付いている記録の数
+                    example: 9078299880832848833
+                    format: int64
+                id:
+                    type: integer
+                    example: 761552026747256846
+                    format: int64
+                name:
+                    type: string
+                    example: "n"
+                    pattern: ^\S(.*\S)?$
+                    minLength: 1
+                    maxLength: 50
+            description: A tag owned by the authenticated user
+            example:
+                entry_count: 9078299880832848833
+                id: 761552026747256846
+                name: "n"
+            required:
+                - id
+                - name
+                - entry_count
         TokenResponse:
             type: object
             properties:
@@ -678,6 +936,21 @@ components:
                 - access_token
                 - token_type
                 - expires_in
+        UpdateRequestBody:
+            type: object
+            properties:
+                name:
+                    type: string
+                    description: 新しい名前
+                    example: n2f
+                    pattern: ^\S(.*\S)?$
+                    minLength: 1
+                    maxLength: 50
+            description: Request body for update.
+            example:
+                name: n2f
+            required:
+                - name
         User:
             type: object
             properties:
@@ -711,6 +984,8 @@ components:
 tags:
     - name: entries
       description: Journal entries of the authenticated user
+    - name: tags
+      description: Tags of the authenticated user
     - name: health
       description: health check this server
     - name: users
