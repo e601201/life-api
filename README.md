@@ -98,9 +98,9 @@ db/migrations/000002_create_tags.down.sql
 
 ### テスト
 
-`entries` の CRUD、`users`、`tags` は実際の PostgreSQL に対して流す。確かめたいものが SQL 側
+`entries` の CRUD と検索、`users`、`tags` は実際の PostgreSQL に対して流す。確かめたいものが SQL 側
 （`date` へのキャスト、`RETURNING`、`pgx.ErrNoRows`、UNIQUE / NOT NULL 制約、`user_id` での絞り込み、
-インデックスに合わせた並び）に寄っているため、DB をモックすると肝心なところが残らない。`http_test.go` は Goa の生成コードごと
+`ILIKE` のエスケープ、インデックスに合わせた並び）に寄っているため、DB をモックすると肝心なところが残らない。`http_test.go` は Goa の生成コードごと
 `httptest` で立てて、Authorization ヘッダ → 401 / `user_id` の流れを HTTP で確かめる。
 JWT の発行・検証（`auth_test.go`）だけは DB を使わない。
 
@@ -152,6 +152,24 @@ DSL では `JWTSecurity("jwt")` を定義し、`entries` サービスと `users.
   タグ検索（#45）用に `(tag_id, entry_id)` のインデックスも張ってある
 - 記録の作成・更新はトランザクションで、名前の upsert と紐付けを 1 文でやる（`entries.go` の `setTags`）
 
+### 検索
+
+`GET /entries` のクエリパラメータで絞り込む。指定しなければ全件で、複数指定は全て AND。
+並びとページネーション（`limit` / `offset`）は一覧と同じ。別のエンドポイントにしなかったのは、
+どれも絞り込みであり、並びとページネーションを二重に持ちたくないため。
+
+| パラメータ | 意味 |
+| --- | --- |
+| `tag=go&tag=aws` | このタグが**全て**付いている記録（繰り返しで AND） |
+| `q=goa` | `title` か `body` にこの文字列を含む記録。大文字小文字は区別しない。`% _ \` もそのままの文字として探す |
+| `from=2026-09-01` / `to=2026-09-30` | 記録日（`entry_date`）の範囲。両端を含む。片方だけでもよい |
+
+- 期間は `entry_date`（日付）だけで見る。`created_at` は timestamptz で、Fargate（UTC）とローカル（+09:00）で
+  日付の境界がずれるため検索には使わない（09/05 の気づき）
+- `q` は PostgreSQL の全文検索（tsvector）ではなく `ILIKE` の部分一致。tsvector は日本語を分かち書き
+  できない。1 人分の記録量なら `user_id` で絞ったあとの走査で足りるので、インデックスも張っていない
+- 値が空のパラメータ（`?q=`）は Goa が未指定として扱う。`from > to` は 400 ではなく空の一覧
+
 ### 打鍵確認（curl）
 
 entries の CRUD は `entries` テーブルへの読み書き（`entries.go`）。プロセスを再起動しても
@@ -186,6 +204,12 @@ curl -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' local
 curl -H "Authorization: Bearer $TOKEN" localhost:8080/entries
 curl -H "Authorization: Bearer $TOKEN" 'localhost:8080/entries?limit=3&offset=10'   # 11 件目から 3 件
 curl -H "Authorization: Bearer $TOKEN" localhost:8080/entries/1
+
+# 検索（タグは繰り返しで AND、q は部分一致、from / to は記録日で両端を含む。全て組み合わせ可）
+curl -H "Authorization: Bearer $TOKEN" 'localhost:8080/entries?tag=go&tag=goa'
+curl -H "Authorization: Bearer $TOKEN" 'localhost:8080/entries?q=goa'
+curl -H "Authorization: Bearer $TOKEN" 'localhost:8080/entries?from=2026-09-01&to=2026-09-30'
+curl -H "Authorization: Bearer $TOKEN" 'localhost:8080/entries?tag=go&q=JWT&from=2026-09-01&limit=5'
 
 # 更新（created_at と user_id は維持され、updated_at だけ進む。
 #  body や tags を省くと NULL / [] に戻る＝PUT なので送った内容で全体を置き換える）

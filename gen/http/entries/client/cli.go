@@ -75,7 +75,7 @@ func BuildCreatePayload(entriesCreateBody string, entriesCreateToken string) (*e
 
 // BuildListPayload builds the payload for the entries list endpoint from CLI
 // flags.
-func BuildListPayload(entriesListLimit string, entriesListOffset string, entriesListToken string) (*entries.ListPayload, error) {
+func BuildListPayload(entriesListLimit string, entriesListOffset string, entriesListTag string, entriesListQ string, entriesListFrom string, entriesListTo string, entriesListToken string) (*entries.ListPayload, error) {
 	var err error
 	var limit int
 	{
@@ -114,6 +114,65 @@ func BuildListPayload(entriesListLimit string, entriesListOffset string, entries
 			}
 		}
 	}
+	var tag []string
+	{
+		if entriesListTag != "" {
+			err = json.Unmarshal([]byte(entriesListTag), &tag)
+			if err != nil {
+				return nil, fmt.Errorf("invalid JSON for tag, \nerror: %s, \nexample of valid JSON:\n%s", err, "'[\n      \"2j2\",\n      \"w\",\n      \"5lp\"\n   ]'")
+			}
+			if len(tag) > 20 {
+				err = goa.MergeErrors(err, goa.InvalidLengthError("tag", tag, len(tag), 20, false))
+			}
+			for _, e := range tag {
+				err = goa.MergeErrors(err, goa.ValidatePattern("tag[*]", e, "^\\S(.*\\S)?$"))
+				if utf8.RuneCountInString(e) < 1 {
+					err = goa.MergeErrors(err, goa.InvalidLengthError("tag[*]", e, utf8.RuneCountInString(e), 1, true))
+				}
+				if utf8.RuneCountInString(e) > 50 {
+					err = goa.MergeErrors(err, goa.InvalidLengthError("tag[*]", e, utf8.RuneCountInString(e), 50, false))
+				}
+			}
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	var q *string
+	{
+		if entriesListQ != "" {
+			q = &entriesListQ
+			if utf8.RuneCountInString(*q) < 1 {
+				err = goa.MergeErrors(err, goa.InvalidLengthError("q", *q, utf8.RuneCountInString(*q), 1, true))
+			}
+			if utf8.RuneCountInString(*q) > 100 {
+				err = goa.MergeErrors(err, goa.InvalidLengthError("q", *q, utf8.RuneCountInString(*q), 100, false))
+			}
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	var from *string
+	{
+		if entriesListFrom != "" {
+			from = &entriesListFrom
+			err = goa.MergeErrors(err, goa.ValidateFormat("from", *from, goa.FormatDate))
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	var to *string
+	{
+		if entriesListTo != "" {
+			to = &entriesListTo
+			err = goa.MergeErrors(err, goa.ValidateFormat("to", *to, goa.FormatDate))
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
 	var token *string
 	{
 		if entriesListToken != "" {
@@ -123,6 +182,10 @@ func BuildListPayload(entriesListLimit string, entriesListOffset string, entries
 	v := &entries.ListPayload{}
 	v.Limit = limit
 	v.Offset = offset
+	v.Tag = tag
+	v.Q = q
+	v.From = from
+	v.To = to
 	v.Token = token
 
 	return v, nil

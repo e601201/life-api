@@ -17,7 +17,7 @@ paths:
             tags:
                 - entries
             summary: list entries
-            description: List the authenticated user's journal entries
+            description: List or search the authenticated user's journal entries
             operationId: entries#list
             parameters:
                 - name: limit
@@ -35,6 +35,37 @@ paths:
                   type: integer
                   default: 0
                   minimum: 0
+                - name: tag
+                  in: query
+                  description: このタグが全て付いている記録に絞る
+                  required: false
+                  type: array
+                  items:
+                    type: string
+                    maxLength: 50
+                    minLength: 1
+                    pattern: ^\S(.*\S)?$
+                  collectionFormat: multi
+                  maxItems: 20
+                - name: q
+                  in: query
+                  description: title か body に含まれる文字列
+                  required: false
+                  type: string
+                  maxLength: 100
+                  minLength: 1
+                - name: from
+                  in: query
+                  description: この記録日以降（含む）
+                  required: false
+                  type: string
+                  format: date
+                - name: to
+                  in: query
+                  description: この記録日以前（含む）
+                  required: false
+                  type: string
+                  format: date
             responses:
                 "200":
                     description: OK response.

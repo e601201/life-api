@@ -12,6 +12,9 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"slices"
+	"strings"
 	"testing"
 
 	entries "github.com/e601201/life-api/gen/entries"
@@ -372,4 +375,65 @@ func equalJSONStrings(got any, want ...string) bool {
 		}
 	}
 	return true
+}
+
+func TestHTTPSearch(t *testing.T) {
+	srv := newTestServer(t)
+	auth, _ := login(t, srv, "alice@example.com", "correct horse")
+
+	for _, e := range []map[string]any{
+		{"title": "Goa 入門", "entry_date": "2026-09-01", "kind": "til", "tags": []string{"go", "goa"}},
+		{"title": "AWS の設定", "entry_date": "2026-09-02", "kind": "til", "tags": []string{"aws"}},
+		{"title": "goa で JWT", "entry_date": "2026-09-04", "kind": "til", "tags": []string{"go", "goa", "aws"}},
+	} {
+		resp, body := call(t, srv, http.MethodPost, "/entries", auth, e)
+		requireStatus(t, resp, body, http.StatusCreated, "")
+	}
+
+	// クエリ文字列で tag（繰り返し）/ q / from / to を渡す。全て AND。
+	for _, tt := range []struct {
+		name  string
+		query string
+		want  []string
+	}{
+		{name: "tag 複数", query: "?tag=go&tag=aws", want: []string{"goa で JWT"}},
+		{name: "q（大文字小文字を区別しない）", query: "?q=goa", want: []string{"goa で JWT", "Goa 入門"}},
+		{name: "期間", query: "?from=2026-09-02&to=2026-09-03", want: []string{"AWS の設定"}},
+		{name: "組み合わせ", query: "?tag=goa&q=JWT&from=2026-09-01", want: []string{"goa で JWT"}},
+		{name: "日本語の q", query: "?q=" + url.QueryEscape("入門"), want: []string{"Goa 入門"}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			resp, list := callList(t, srv, http.MethodGet, "/entries"+tt.query, auth)
+			if resp.StatusCode != http.StatusOK {
+				t.Fatalf("status = %d", resp.StatusCode)
+			}
+			var titles []string
+			for _, j := range list {
+				titles = append(titles, j.(map[string]any)["title"].(string))
+			}
+			if !slices.Equal(titles, tt.want) {
+				t.Errorf("titles = %v, want %v", titles, tt.want)
+			}
+		})
+	}
+
+	// 値が空のパラメータ（?q=）は Goa が「未指定」として扱うので、絞り込み無しの 200。
+	resp, list := callList(t, srv, http.MethodGet, "/entries?q=", auth)
+	if resp.StatusCode != http.StatusOK || len(list) != 3 {
+		t.Errorf("?q=: status = %d, len = %d, want 200 で全件", resp.StatusCode, len(list))
+	}
+
+	// DSL の制約は Goa のデコード段階で 400 になる。
+	for _, tt := range []struct{ name, query string }{
+		{name: "from が日付ではない", query: "?from=banana"},
+		{name: "q が長すぎる", query: "?q=" + strings.Repeat("a", 101)},
+		{name: "tag が空文字", query: "?tag="},
+		{name: "tag の前後に空白", query: "?tag=" + url.QueryEscape(" go")},
+		{name: "limit が範囲外", query: "?limit=0"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			resp, body := call(t, srv, http.MethodGet, "/entries"+tt.query, auth, nil)
+			requireStatus(t, resp, body, http.StatusBadRequest, "")
+		})
+	}
 }

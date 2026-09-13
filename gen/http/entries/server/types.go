@@ -467,10 +467,14 @@ func NewCreatePayload(body *CreateRequestBody, token *string) *entries.CreatePay
 }
 
 // NewListPayload builds a entries service list endpoint payload.
-func NewListPayload(limit int, offset int, token *string) *entries.ListPayload {
+func NewListPayload(limit int, offset int, tag []string, q *string, from *string, to *string, token *string) *entries.ListPayload {
 	v := &entries.ListPayload{}
 	v.Limit = limit
 	v.Offset = offset
+	v.Tag = tag
+	v.Q = q
+	v.From = from
+	v.To = to
 	v.Token = token
 
 	return v

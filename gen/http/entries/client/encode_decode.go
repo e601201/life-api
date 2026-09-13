@@ -162,6 +162,18 @@ func EncodeListRequest(encoder func(*http.Request) goahttp.Encoder) func(*http.R
 		values := req.URL.Query()
 		values.Add("limit", fmt.Sprintf("%v", p.Limit))
 		values.Add("offset", fmt.Sprintf("%v", p.Offset))
+		for _, value := range p.Tag {
+			values.Add("tag", value)
+		}
+		if p.Q != nil {
+			values.Add("q", *p.Q)
+		}
+		if p.From != nil {
+			values.Add("from", *p.From)
+		}
+		if p.To != nil {
+			values.Add("to", *p.To)
+		}
 		req.URL.RawQuery = values.Encode()
 		return nil
 	}

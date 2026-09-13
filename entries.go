@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	entries "github.com/e601201/life-api/gen/entries"
@@ -213,26 +214,67 @@ func (s *entriessrvc) Create(ctx context.Context, p *entries.CreatePayload) (*en
 	}, nil
 }
 
-// List journal entries
+// likePattern は q を ILIKE の部分一致パターンにする。% _ \ はそのままだと
+// ワイルドカードやエスケープとして解釈されるので、リテラルとして探せるよう先にエスケープする
+// （SQL 側は ESCAPE '\' を付けて対にする）。
+func likePattern(q string) string {
+	r := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+	return "%" + r.Replace(q) + "%"
+}
+
+// List or search journal entries
 func (s *entriessrvc) List(ctx context.Context, p *entries.ListPayload) ([]*entries.Journal, error) {
-	log.Printf(ctx, "entries.list limit=%d offset=%d", p.Limit, p.Offset)
+	log.Printf(ctx, "entries.list limit=%d offset=%d tags=%d q=%v from=%v to=%v",
+		p.Limit, p.Offset, len(p.Tag), p.Q != nil, p.From != nil, p.To != nil)
 
 	userID, err := userFromContext(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("list entries: %w", err)
 	}
 
+	// WHERE は指定された条件だけを AND で並べる。プレースホルダの番号は args の
+	// 長さから振るので、条件を足す順番に依存しない。
+	where := []string{"e.user_id = $1"}
+	args := []any{userID}
+	arg := func(v any) string {
+		args = append(args, v)
+		return fmt.Sprintf("$%d", len(args))
+	}
+
+	// タグは「指定した名前が全部付いている」（AND）。同じユーザの中で名前は一意なので、
+	// 一致したタグの数が指定した数と同じなら全部付いている。重複を除いておかないと
+	// 数が合わなくなる。
+	if tagNames := uniqueTags(p.Tag); len(tagNames) > 0 {
+		where = append(where, fmt.Sprintf(`(SELECT count(*)
+		                                   FROM entry_tags et
+		                                   JOIN tags t ON t.id = et.tag_id
+		                                   WHERE et.entry_id = e.id AND t.name = ANY(%s)) = %d`,
+			arg(tagNames), len(tagNames)))
+	}
+	if p.Q != nil {
+		ph := arg(likePattern(*p.Q))
+		where = append(where, fmt.Sprintf(`(e.title ILIKE %s ESCAPE '\' OR e.body ILIKE %s ESCAPE '\')`, ph, ph))
+	}
+	// 期間は entry_date（date）同士の比較なので、タイムゾーンの影響を受けない。
+	if p.From != nil {
+		where = append(where, fmt.Sprintf("e.entry_date >= %s::date", arg(*p.From)))
+	}
+	if p.To != nil {
+		where = append(where, fmt.Sprintf("e.entry_date <= %s::date", arg(*p.To)))
+	}
+
 	// 自分の記録を、記録日の新しい順。entries_user_id_entry_date_idx が
 	// (user_id, entry_date DESC, id DESC) なので、user_id で絞ったあともソートを挟まずに読める。
+	// 検索条件はその上でのフィルタで、1 人分の記録量なら走査で足りる。
 	//
 	// limit / offset の既定値と取りうる範囲は DSL 側（Default / Minimum / Maximum）で
 	// 決めている。ここで補正すると同じ規則が 2 箇所に散るので、受け取った値をそのまま渡す。
-	const q = journalSelect + `
-	           WHERE e.user_id = $1
-	           ORDER BY e.entry_date DESC, e.id DESC
-	           LIMIT $2 OFFSET $3`
+	q := journalSelect + `
+	     WHERE ` + strings.Join(where, " AND ") + `
+	     ORDER BY e.entry_date DESC, e.id DESC
+	     LIMIT ` + arg(p.Limit) + ` OFFSET ` + arg(p.Offset)
 
-	rows, err := s.db.Query(ctx, q, userID, p.Limit, p.Offset)
+	rows, err := s.db.Query(ctx, q, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list entries: %w", err)
 	}

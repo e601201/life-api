@@ -18,7 +18,7 @@ import (
 type Service interface {
 	// Create a new journal entry owned by the authenticated user
 	Create(context.Context, *CreatePayload) (res *CreateResult, err error)
-	// List the authenticated user's journal entries
+	// List or search the authenticated user's journal entries
 	List(context.Context, *ListPayload) (res []*Journal, err error)
 	// Get a journal entry by ID (entries of other users are not found)
 	Get(context.Context, *GetPayload) (res *Journal, err error)
@@ -117,6 +117,14 @@ type ListPayload struct {
 	Limit int
 	// 先頭から読み飛ばす件数
 	Offset int
+	// このタグが全て付いている記録に絞る
+	Tag []string
+	// title か body に含まれる文字列
+	Q *string
+	// この記録日以降（含む）
+	From *string
+	// この記録日以前（含む）
+	To *string
 	// JWT (Authorization: Bearer <token>)
 	Token *string
 }

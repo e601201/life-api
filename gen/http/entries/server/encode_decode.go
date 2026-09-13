@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	entries "github.com/e601201/life-api/gen/entries"
 	goahttp "goa.design/goa/v3/http"
@@ -127,6 +128,10 @@ func DecodeListRequest(mux goahttp.Muxer, decoder func(*http.Request) goahttp.De
 		var (
 			limit  int
 			offset int
+			tag    []string
+			q      *string
+			from   *string
+			to     *string
 			token  *string
 			err    error
 		)
@@ -162,6 +167,47 @@ func DecodeListRequest(mux goahttp.Muxer, decoder func(*http.Request) goahttp.De
 		if offset < 0 {
 			err = goa.MergeErrors(err, goa.InvalidRangeError("offset", offset, 0, true))
 		}
+		tag = qp["tag"]
+		if len(tag) > 20 {
+			err = goa.MergeErrors(err, goa.InvalidLengthError("tag", tag, len(tag), 20, false))
+		}
+		for _, e := range tag {
+			err = goa.MergeErrors(err, goa.ValidatePattern("tag[*]", e, "^\\S(.*\\S)?$"))
+			if utf8.RuneCountInString(e) < 1 {
+				err = goa.MergeErrors(err, goa.InvalidLengthError("tag[*]", e, utf8.RuneCountInString(e), 1, true))
+			}
+			if utf8.RuneCountInString(e) > 50 {
+				err = goa.MergeErrors(err, goa.InvalidLengthError("tag[*]", e, utf8.RuneCountInString(e), 50, false))
+			}
+		}
+		qRaw := qp.Get("q")
+		if qRaw != "" {
+			q = &qRaw
+		}
+		if q != nil {
+			if utf8.RuneCountInString(*q) < 1 {
+				err = goa.MergeErrors(err, goa.InvalidLengthError("q", *q, utf8.RuneCountInString(*q), 1, true))
+			}
+		}
+		if q != nil {
+			if utf8.RuneCountInString(*q) > 100 {
+				err = goa.MergeErrors(err, goa.InvalidLengthError("q", *q, utf8.RuneCountInString(*q), 100, false))
+			}
+		}
+		fromRaw := qp.Get("from")
+		if fromRaw != "" {
+			from = &fromRaw
+		}
+		if from != nil {
+			err = goa.MergeErrors(err, goa.ValidateFormat("from", *from, goa.FormatDate))
+		}
+		toRaw := qp.Get("to")
+		if toRaw != "" {
+			to = &toRaw
+		}
+		if to != nil {
+			err = goa.MergeErrors(err, goa.ValidateFormat("to", *to, goa.FormatDate))
+		}
 		tokenRaw := r.Header.Get("Authorization")
 		if tokenRaw != "" {
 			token = &tokenRaw
@@ -169,7 +215,7 @@ func DecodeListRequest(mux goahttp.Muxer, decoder func(*http.Request) goahttp.De
 		if err != nil {
 			return payload, err
 		}
-		payload = NewListPayload(limit, offset, token)
+		payload = NewListPayload(limit, offset, tag, q, from, to, token)
 		if payload.Token != nil {
 			if strings.Contains(*payload.Token, " ") {
 				// Remove authorization scheme prefix (e.g. "Bearer")

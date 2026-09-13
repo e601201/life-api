@@ -76,6 +76,10 @@ func ParseEndpoint(
 		entriesListFlags      = flag.NewFlagSet("list", flag.ExitOnError)
 		entriesListLimitFlag  = entriesListFlags.String("limit", "10", "")
 		entriesListOffsetFlag = entriesListFlags.String("offset", "", "")
+		entriesListTagFlag    = entriesListFlags.String("tag", "", "")
+		entriesListQFlag      = entriesListFlags.String("q", "", "")
+		entriesListFromFlag   = entriesListFlags.String("from", "", "")
+		entriesListToFlag     = entriesListFlags.String("to", "", "")
 		entriesListTokenFlag  = entriesListFlags.String("token", "", "")
 
 		entriesGetFlags     = flag.NewFlagSet("get", flag.ExitOnError)
@@ -262,7 +266,7 @@ func ParseEndpoint(
 				data, err = entriesc.BuildCreatePayload(*entriesCreateBodyFlag, *entriesCreateTokenFlag)
 			case "list":
 				endpoint = c.List()
-				data, err = entriesc.BuildListPayload(*entriesListLimitFlag, *entriesListOffsetFlag, *entriesListTokenFlag)
+				data, err = entriesc.BuildListPayload(*entriesListLimitFlag, *entriesListOffsetFlag, *entriesListTagFlag, *entriesListQFlag, *entriesListFromFlag, *entriesListToFlag, *entriesListTokenFlag)
 			case "get":
 				endpoint = c.Get()
 				data, err = entriesc.BuildGetPayload(*entriesGetIDFlag, *entriesGetTokenFlag)
@@ -393,7 +397,7 @@ func entriesUsage() {
 	fmt.Fprintf(os.Stderr, "Usage:\n    %s [globalflags] entries COMMAND [flags]\n\n", os.Args[0])
 	fmt.Fprintln(os.Stderr, "COMMAND:")
 	fmt.Fprintln(os.Stderr, `    create: Create a new journal entry owned by the authenticated user`)
-	fmt.Fprintln(os.Stderr, `    list: List the authenticated user's journal entries`)
+	fmt.Fprintln(os.Stderr, `    list: List or search the authenticated user's journal entries`)
 	fmt.Fprintln(os.Stderr, `    get: Get a journal entry by ID (entries of other users are not found)`)
 	fmt.Fprintln(os.Stderr, `    update: Update a journal entry by ID (entries of other users are not found)`)
 	fmt.Fprintln(os.Stderr, `    delete: Delete a journal entry by ID (entries of other users are not found)`)
@@ -426,21 +430,29 @@ func entriesListUsage() {
 	fmt.Fprintf(os.Stderr, "%s [flags] entries list", os.Args[0])
 	fmt.Fprint(os.Stderr, " -limit INT")
 	fmt.Fprint(os.Stderr, " -offset INT")
+	fmt.Fprint(os.Stderr, " -tag JSON")
+	fmt.Fprint(os.Stderr, " -q STRING")
+	fmt.Fprint(os.Stderr, " -from STRING")
+	fmt.Fprint(os.Stderr, " -to STRING")
 	fmt.Fprint(os.Stderr, " -token STRING")
 	fmt.Fprintln(os.Stderr)
 
 	// Description
 	fmt.Fprintln(os.Stderr)
-	fmt.Fprintln(os.Stderr, `List the authenticated user's journal entries`)
+	fmt.Fprintln(os.Stderr, `List or search the authenticated user's journal entries`)
 
 	// Flags list
 	fmt.Fprintln(os.Stderr, `    -limit INT: `)
 	fmt.Fprintln(os.Stderr, `    -offset INT: `)
+	fmt.Fprintln(os.Stderr, `    -tag JSON: `)
+	fmt.Fprintln(os.Stderr, `    -q STRING: `)
+	fmt.Fprintln(os.Stderr, `    -from STRING: `)
+	fmt.Fprintln(os.Stderr, `    -to STRING: `)
 	fmt.Fprintln(os.Stderr, `    -token STRING: `)
 
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, "Example:")
-	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "entries list --limit 15 --offset 1831350278493953792 --token \"Earum quo aspernatur minima perspiciatis aliquid voluptates.\"")
+	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "entries list --limit 15 --offset 1831350278493953792 --tag '[\n      \"2j2\",\n      \"w\",\n      \"5lp\"\n   ]' --q \"wxw\" --from \"1981-12-03\" --to \"1977-04-23\" --token \"Earum quo aspernatur minima perspiciatis aliquid voluptates.\"")
 }
 
 func entriesGetUsage() {

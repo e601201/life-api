@@ -264,9 +264,13 @@ var _ = Service("entries", func() {
 	})
 
 	Method("list", func() {
-		Description("List the authenticated user's journal entries")
+		Description("List or search the authenticated user's journal entries")
 		// 無条件に全件返すと、件数が増えるほど1リクエストが重くなる。
 		// 既定は 10 件で、クエリパラメータでずらして読む。
+		//
+		// 検索（tag / q / from / to）も同じメソッドに載せる。どれも絞り込みなので、
+		// 別のエンドポイントに分けるとページネーションと並びを二重に持つことになる。
+		// 指定しなければ全件で、複数指定は全て AND。
 		Payload(func() {
 			Attribute("limit", Int, "取得する件数", func() {
 				Minimum(1)
@@ -277,6 +281,25 @@ var _ = Service("entries", func() {
 				Minimum(0)
 				Default(0)
 			})
+			// ?tag=go&tag=aws のように繰り返せる。全部付いている記録だけに絞る（AND）。
+			Attribute("tag", ArrayOf(String, tagName), "このタグが全て付いている記録に絞る", func() {
+				MaxLength(20)
+			})
+			// title か body にこの文字列を含む記録。大文字小文字は区別しない。
+			// PostgreSQL の全文検索（tsvector）は日本語を分かち書きできないので、部分一致にしている。
+			Attribute("q", String, "title か body に含まれる文字列", func() {
+				MinLength(1)
+				MaxLength(100)
+			})
+			// 期間は entry_date（日付）で絞る。両端を含む。
+			// created_at は timestamptz で、Fargate（UTC）とローカル（+09:00）で日付の境界が
+			// ずれるため検索には使わない（09/05 の気づき）。
+			Attribute("from", String, "この記録日以降（含む）", func() {
+				Format(FormatDate)
+			})
+			Attribute("to", String, "この記録日以前（含む）", func() {
+				Format(FormatDate)
+			})
 			jwtToken()
 		})
 		Result(ArrayOf(Journal))
@@ -285,6 +308,10 @@ var _ = Service("entries", func() {
 			GET("/entries")
 			Param("limit")
 			Param("offset")
+			Param("tag")
+			Param("q")
+			Param("from")
+			Param("to")
 			Response(StatusOK)
 		})
 	})

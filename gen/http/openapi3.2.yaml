@@ -13,7 +13,7 @@ paths:
             tags:
                 - entries
             summary: list entries
-            description: List the authenticated user's journal entries
+            description: List or search the authenticated user's journal entries
             operationId: entries#list
             parameters:
                 - name: limit
@@ -41,6 +41,59 @@ paths:
                     format: int64
                     minimum: 0
                   example: 2769024022504360985
+                - name: tag
+                  in: query
+                  description: このタグが全て付いている記録に絞る
+                  allowEmptyValue: true
+                  schema:
+                    type: array
+                    items:
+                        type: string
+                        example: 8pg
+                        pattern: ^\S(.*\S)?$
+                        minLength: 1
+                        maxLength: 50
+                    description: このタグが全て付いている記録に絞る
+                    example:
+                        - 2j2
+                        - w
+                        - 5lp
+                    maxItems: 20
+                  example:
+                    - "3"
+                    - h4
+                    - 0gr
+                - name: q
+                  in: query
+                  description: title か body に含まれる文字列
+                  allowEmptyValue: true
+                  schema:
+                    type: string
+                    description: title か body に含まれる文字列
+                    example: wxw
+                    minLength: 1
+                    maxLength: 100
+                  example: o
+                - name: from
+                  in: query
+                  description: この記録日以降（含む）
+                  allowEmptyValue: true
+                  schema:
+                    type: string
+                    description: この記録日以降（含む）
+                    example: "1981-12-03"
+                    format: date
+                  example: "1989-06-05"
+                - name: to
+                  in: query
+                  description: この記録日以前（含む）
+                  allowEmptyValue: true
+                  schema:
+                    type: string
+                    description: この記録日以前（含む）
+                    example: "1977-04-23"
+                    format: date
+                  example: "2001-11-06"
             responses:
                 "200":
                     description: OK response.

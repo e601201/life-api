@@ -756,3 +756,154 @@ func TestHealthCheckDatabaseDown(t *testing.T) {
 		t.Errorf("message = %q, want %q（詳細はログにだけ残す）", serr.Message, "database unavailable")
 	}
 }
+
+// idsOf は一覧の id を取り出す。検索の結果を want と比べるときに使う。
+func idsOf(list []*entries.Journal) []int64 {
+	ids := make([]int64, 0, len(list))
+	for _, j := range list {
+		ids = append(ids, *j.ID)
+	}
+	return ids
+}
+
+// seedSearch は検索のテストで使う記録を 4 件作る。戻り値は作った順の id。
+//
+//	[0] 09-01 "Goa 入門"    body "DSL を書く"   tags go, goa
+//	[1] 09-02 "AWS の設定"  body "ECS と RDS"   tags aws
+//	[2] 09-03 "散歩"        body なし           tags なし
+//	[3] 09-04 "goa で JWT"  body "100%_done"    tags go, goa, aws
+func seedSearch(t *testing.T, ctx context.Context, svc entries.Service) []int64 {
+	t.Helper()
+	body := func(s string) *string { return &s }
+	seeds := []*entries.CreatePayload{
+		{EntryDate: "2026-09-01", Kind: "til", Title: "Goa 入門", Body: body("DSL を書く"), Tags: []string{"go", "goa"}},
+		{EntryDate: "2026-09-02", Kind: "til", Title: "AWS の設定", Body: body("ECS と RDS"), Tags: []string{"aws"}},
+		{EntryDate: "2026-09-03", Kind: "diary", Title: "散歩"},
+		{EntryDate: "2026-09-04", Kind: "til", Title: "goa で JWT", Body: body("100%_done"), Tags: []string{"go", "goa", "aws"}},
+	}
+	ids := make([]int64, 0, len(seeds))
+	for _, p := range seeds {
+		res, err := svc.Create(ctx, p)
+		if err != nil {
+			t.Fatalf("create %q: %v", p.Title, err)
+		}
+		ids = append(ids, *res.ID)
+	}
+	return ids
+}
+
+func TestListSearch(t *testing.T) {
+	svc, ctx := newService(t)
+	ids := seedSearch(t, ctx, svc)
+	str := func(s string) *string { return &s }
+
+	// 結果は記録日の新しい順（ids の逆順）で返る。
+	tests := []struct {
+		name    string
+		payload entries.ListPayload
+		want    []int64
+	}{
+		{name: "条件なし", payload: entries.ListPayload{}, want: []int64{ids[3], ids[2], ids[1], ids[0]}},
+
+		// tag
+		{name: "タグ 1 つ", payload: entries.ListPayload{Tag: []string{"aws"}}, want: []int64{ids[3], ids[1]}},
+		{name: "タグ複数は AND", payload: entries.ListPayload{Tag: []string{"go", "aws"}}, want: []int64{ids[3]}},
+		{name: "タグの重複指定は 1 つと同じ", payload: entries.ListPayload{Tag: []string{"go", "go"}}, want: []int64{ids[3], ids[0]}},
+		{name: "無いタグ", payload: entries.ListPayload{Tag: []string{"rust"}}, want: nil},
+
+		// q
+		{name: "title に含む", payload: entries.ListPayload{Q: str("入門")}, want: []int64{ids[0]}},
+		{name: "body に含む", payload: entries.ListPayload{Q: str("RDS")}, want: []int64{ids[1]}},
+		{name: "大文字小文字を区別しない", payload: entries.ListPayload{Q: str("GOA")}, want: []int64{ids[3], ids[0]}},
+		{name: "% はワイルドカードではなく文字", payload: entries.ListPayload{Q: str("%_done")}, want: []int64{ids[3]}},
+		// "1_0" は _ が 1 文字ワイルドカードなら "100" に当たる。リテラル扱いなら何にも当たらない。
+		{name: "_ もワイルドカードではない", payload: entries.ListPayload{Q: str("1_0")}, want: nil},
+		{name: "含まない", payload: entries.ListPayload{Q: str("rust")}, want: nil},
+
+		// from / to（entry_date、両端を含む）
+		{name: "from のみ", payload: entries.ListPayload{From: str("2026-09-03")}, want: []int64{ids[3], ids[2]}},
+		{name: "to のみ", payload: entries.ListPayload{To: str("2026-09-02")}, want: []int64{ids[1], ids[0]}},
+		{name: "from と to", payload: entries.ListPayload{From: str("2026-09-02"), To: str("2026-09-03")}, want: []int64{ids[2], ids[1]}},
+		{name: "同じ日", payload: entries.ListPayload{From: str("2026-09-02"), To: str("2026-09-02")}, want: []int64{ids[1]}},
+		{name: "from > to は空", payload: entries.ListPayload{From: str("2026-09-03"), To: str("2026-09-02")}, want: nil},
+
+		// 組み合わせは全て AND。ページネーションも効く
+		{name: "tag と q", payload: entries.ListPayload{Tag: []string{"go"}, Q: str("JWT")}, want: []int64{ids[3]}},
+		{name: "tag と期間", payload: entries.ListPayload{Tag: []string{"go"}, To: str("2026-09-03")}, want: []int64{ids[0]}},
+		{name: "q と期間で該当なし", payload: entries.ListPayload{Q: str("Goa"), From: str("2026-09-02"), To: str("2026-09-03")}, want: nil},
+		{name: "tag と limit / offset", payload: entries.ListPayload{Tag: []string{"goa"}, Limit: 1, Offset: 1}, want: []int64{ids[0]}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// limit の既定値（10）は DSL の Default で入るので、直接呼ぶときはここで補う。
+			if tt.payload.Limit == 0 {
+				tt.payload.Limit = 10
+			}
+			got, err := svc.List(ctx, &tt.payload)
+			if err != nil {
+				t.Fatalf("list: %v", err)
+			}
+			if got == nil {
+				t.Fatal("list = nil, want 空スライス")
+			}
+			if !slices.Equal(idsOf(got), tt.want) {
+				t.Errorf("ids = %v, want %v", idsOf(got), tt.want)
+			}
+		})
+	}
+}
+
+func TestListSearchScopedToUser(t *testing.T) {
+	svc, alice := newService(t)
+	bob := asOtherUser(t, alice)
+
+	seedSearch(t, alice, svc)
+	// bob にも同じタグ名・同じ語を含む記録を作る。alice の検索には出ない。
+	if _, err := svc.Create(bob, &entries.CreatePayload{
+		EntryDate: "2026-09-04", Kind: "til", Title: "bob の Goa", Tags: []string{"go", "goa", "aws"},
+	}); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	q := "Goa"
+	for _, tt := range []struct {
+		name    string
+		ctx     context.Context
+		payload entries.ListPayload
+		wantLen int
+	}{
+		{name: "alice のタグ検索", ctx: alice, payload: entries.ListPayload{Limit: 10, Tag: []string{"go", "aws"}}, wantLen: 1},
+		{name: "bob のタグ検索", ctx: bob, payload: entries.ListPayload{Limit: 10, Tag: []string{"go", "aws"}}, wantLen: 1},
+		{name: "alice の文字列検索", ctx: alice, payload: entries.ListPayload{Limit: 10, Q: &q}, wantLen: 2},
+		{name: "bob の文字列検索", ctx: bob, payload: entries.ListPayload{Limit: 10, Q: &q}, wantLen: 1},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := svc.List(tt.ctx, &tt.payload)
+			if err != nil {
+				t.Fatalf("list: %v", err)
+			}
+			if len(got) != tt.wantLen {
+				t.Errorf("len = %d, want %d: %v", len(got), tt.wantLen, idsOf(got))
+			}
+			uid, _ := UserIDFromContext(tt.ctx)
+			for _, j := range got {
+				if *j.UserID != uid {
+					t.Errorf("entry %d の user_id = %d, 他人の記録が混ざっている", *j.ID, *j.UserID)
+				}
+			}
+		})
+	}
+}
+
+func TestLikePattern(t *testing.T) {
+	for _, tt := range []struct{ in, want string }{
+		{"goa", "%goa%"},
+		{"100%", `%100\%%`},
+		{"a_b", `%a\_b%`},
+		{`C:\`, `%C:\\%`},
+	} {
+		if got := likePattern(tt.in); got != tt.want {
+			t.Errorf("likePattern(%q) = %q, want %q", tt.in, got, tt.want)
+		}
+	}
+}
