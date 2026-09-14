@@ -314,12 +314,14 @@ aws ec2 describe-network-interfaces --network-interface-ids "$eni" \
 `--platform linux/amd64` と `--provenance=false` の 2 つは省かない（08/29・09/05 の TIL）。
 前者が無いと arm64 Mac のイメージになって Fargate で動かず、後者が無いとイメージが
 OCI index になってタグなしの実体が並ぶ。
+`${repo}` の波括弧も省かない。zsh は `$repo:latest` の `:l` を小文字化の修飾子と読み、
+タグが `life-apiatest`（`:latest` が消えて `atest` だけ残る）になって push が「repository が無い」で落ちる（09/14 の TIL）。
 
 ```sh
 repo=$(terraform -chdir=terraform output -raw ecr_repository_url)
 aws ecr get-login-password | docker login --username AWS --password-stdin "${repo%/*}"
-docker build --platform linux/amd64 --provenance=false -t "$repo:latest" .
-docker push "$repo:latest"
+docker build --platform linux/amd64 --provenance=false -t "${repo}:latest" .
+docker push "${repo}:latest"
 aws ecs update-service --cluster life --service life-api --force-new-deployment
 ```
 
