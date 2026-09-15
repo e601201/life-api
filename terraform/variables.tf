@@ -4,18 +4,10 @@ variable "aws_region" {
   default     = "ap-northeast-1"
 }
 
-# ALB を立てるまで（W4）は、タスクのパブリック IP の 8080 を直接叩く。
-# 誰でも叩ける状態にしないため、許可する CIDR を明示させる（既定は空 = 誰も繋げない）。
-# 値は terraform.tfvars に書く（自宅 IP なのでコミットしない。terraform.tfvars.example 参照）。
-variable "api_allowed_cidrs" {
-  description = "api の 8080 に到達できる CIDR のリスト（例: 自宅 IP の /32）"
-  type        = list(string)
-  default     = []
-}
-
-# 既定 0 は「使わないときは止める」運用に合わせたもの。動かすときだけ
-#   terraform apply -var api_desired_count=1
-# で上げ、確認が済んだら引数なしの apply で 0 に戻す。
+# 既定 0 は「使わないときは止める」運用に合わせたもの。起動と停止は
+#   aws ecs update-service --cluster life --service life-api --desired-count 1
+# でやる（state の desired が 0 のままなので、止めたあとの plan に差分が出ない。09/14）。
+# CLI で 1 にしても、次の apply で 0 に戻る。
 variable "api_desired_count" {
   description = "api サービスのタスク数"
   type        = number

@@ -1,6 +1,6 @@
 data "aws_caller_identity" "current" {}
 
-# W4 で独自 VPC に移るまでは、デフォルト VPC のパブリックサブネットに全部置く。
+# 独自 VPC に移る（life#49）までは、デフォルト VPC のパブリックサブネットに全部置く。
 # 自前で作らず参照だけにしているのは、ここで時間を溶かさない方針（goals.md）のため。
 #
 # デフォルト VPC は削除できるし、削除されたまま気づかないことがある（08/29 に実際に無かった）。
@@ -21,6 +21,12 @@ data "aws_subnets" "default" {
 }
 
 locals {
+  # ネットワークの参照はこの 2 つに寄せる。SG / ECS / RDS / ALB は data を直接見ない。
+  # 独自 VPC に移す（life#49）ときは、ここの右辺を resource に差し替えるだけで済ませる。
+  # ALB は 2 つ以上の AZ にまたがるサブネットが要る（デフォルト VPC は 1a / 1c / 1d の 3 つ）。
+  vpc_id            = data.aws_vpc.default.id
+  public_subnet_ids = data.aws_subnets.default.ids
+
   account_id = data.aws_caller_identity.current.account_id
 
   # タスク定義の secrets と、実行ロールの ssm:GetParameters の両方でこの名前を使う。

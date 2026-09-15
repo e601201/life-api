@@ -4,8 +4,8 @@
 
 resource "aws_db_subnet_group" "life" {
   name        = "life"
-  description = "life-api (default VPC subnets)"
-  subnet_ids  = data.aws_subnets.default.ids
+  description = "life-api"
+  subnet_ids  = local.public_subnet_ids
 }
 
 # パスワードは Terraform が生成して state と SSM にだけ置く。リポジトリには入らない。

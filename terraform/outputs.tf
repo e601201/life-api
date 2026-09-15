@@ -11,6 +11,17 @@ output "ecs_service_name" {
   value = aws_ecs_service.api.name
 }
 
+# 人に渡す URL はこれ。タスクを起動し直しても変わらない（ALB を作り直すと変わる）。
+output "alb_dns_name" {
+  description = "ALB の DNS 名"
+  value       = aws_lb.api.dns_name
+}
+
+output "api_url" {
+  description = "curl の宛先。README の打鍵確認の localhost:8080 をこれに読み替える"
+  value       = "http://${aws_lb.api.dns_name}"
+}
+
 output "db_endpoint" {
   description = "RDS のエンドポイント（host:port）。db_enabled=false のときは null"
   value       = var.db_enabled ? aws_db_instance.life[0].endpoint : null
@@ -25,7 +36,7 @@ output "migrate_command" {
     "aws ecs run-task --cluster %s --launch-type FARGATE --task-definition %s --network-configuration 'awsvpcConfiguration={subnets=[%s],securityGroups=[%s],assignPublicIp=ENABLED}'",
     aws_ecs_cluster.life.name,
     aws_ecs_task_definition.migrate.family,
-    join(",", data.aws_subnets.default.ids),
+    join(",", local.public_subnet_ids),
     aws_security_group.api.id,
   )
 }

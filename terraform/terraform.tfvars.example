@@ -1,3 +1,0 @@
-# terraform.tfvars にコピーして使う（自宅 IP が入るのでコミットしない）。
-# 8080 を叩けるのはここに書いた CIDR だけ。今の IP は `curl https://checkip.amazonaws.com`。
-api_allowed_cidrs = ["203.0.113.10/32"]

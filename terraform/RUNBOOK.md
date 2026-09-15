@@ -13,6 +13,8 @@ cp terraform.tfvars.example terraform.tfvars    # 自宅 IP を api_allowed_cidr
 terraform init                                  # provider（aws / random）を取ってくる
 ```
 
+`terraform.tfvars` は life#48（ALB）で不要になった。今は `init` だけでよい。
+
 ## 2. 最初の apply（import と作成）
 
 ```sh
@@ -50,18 +52,36 @@ terraform plan                                  # No changes を確認
 terraform apply -var db_enabled=false           # destroy が RDS と SSM の 2 つだけであることを見て yes
 ```
 
+## ALB を足したとき（life#48、2026-09-15）
+
+plan は「9 to add, 2 to change, 1 to destroy」。サービスへの `load_balancer` の追加は作り直しではなく in-place だった。
+
+```sh
+terraform plan -out=/tmp/48.tfplan && terraform apply /tmp/48.tfplan   # 18:40 → 18:46（ALB 2 分、RDS 6 分）
+terraform output -raw migrate_command | sh                             # 18:47、exit 0、migrated: version 4
+aws ecs update-service --cluster life --service life-api --desired-count 1   # 18:48
+aws ecs wait services-stable --cluster life --services life-api        # 47 秒で healthy
+bash <打鍵スクリプト> "$(terraform output -raw api_url)"                # 18:49、health / users / entries / tags / 異常系 22 項目 ok
+curl -m 5 http://<タスクのパブリック IP>:8080/health                    # タイムアウト（SG で遮断されている）
+aws ecs update-service --cluster life --service life-api --desired-count 0   # 18:50
+terraform plan                                                         # No changes
+terraform plan -var db_enabled=false -out=/tmp/db.tfplan && terraform apply /tmp/db.tfplan   # destroy 2 件（RDS と database-url）
+```
+
 ## 次に AWS で動かすとき
 
 1 と 4 は要らないので短くなる。
 
 ```sh
 cd ~/workspace/life-api/terraform && export AWS_PROFILE=life
+# コードを変えていれば、先に README の「イメージの更新」で build / push。
+# migration はバイナリ埋め込みなので、イメージが古いと新しいスキーマも入らない（09/14）
 terraform apply                                 # RDS と SSM が戻る（既定 db_enabled=true）
 terraform output -raw migrate_command | sh      # 空の DB なのでスキーマ適用から
-terraform apply -var api_desired_count=1        # 起動
-terraform apply                                 # 確認後 0 に戻す
+aws ecs update-service --cluster life --service life-api --desired-count 1   # 起動（state の desired は 0 のまま）
+curl "$(terraform output -raw api_url)/health"  # ALB 経由。healthy になるまで 1 分ほど
+aws ecs update-service --cluster life --service life-api --desired-count 0   # 確認後 0 に戻す
 terraform apply -var db_enabled=false           # 終わったら RDS を消す
 ```
 
-自宅の IP が変わっていたら、起動の apply の前に `terraform.tfvars` を直す
-（今の IP は `curl https://checkip.amazonaws.com`）。
+URL は ALB の DNS 名で固定なので、自宅の IP が変わっても直すものは無い。

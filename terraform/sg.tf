@@ -1,6 +1,35 @@
 # セキュリティグループはルールを別リソース（aws_vpc_security_group_*_rule）で持つ。
 # aws_security_group の inline ブロックと違い、ルール 1 本が 1 リソースになるので
 # 追加・削除の差分が読みやすく、ルール単位で import もできる。
+#
+# 入口の連鎖: 0.0.0.0/0 --80--> alb --8080--> api --5432--> db
+# CIDR で開けるのは alb の 80 だけで、その先は全部 SG の参照。IP が変わっても効く。
+
+# ---- alb ---------------------------------------------------------------------
+# 出口は api の 8080 に絞る。転送もヘルスチェックも同じ経路なので、他に出ていく先は無い。
+resource "aws_security_group" "alb" {
+  name        = "life-api-alb"
+  description = "life-api ALB"
+  vpc_id      = local.vpc_id
+}
+
+resource "aws_vpc_security_group_ingress_rule" "alb_http" {
+  security_group_id = aws_security_group.alb.id
+  description       = "HTTP from anywhere"
+  cidr_ipv4         = "0.0.0.0/0"
+  ip_protocol       = "tcp"
+  from_port         = 80
+  to_port           = 80
+}
+
+resource "aws_vpc_security_group_egress_rule" "alb_to_api" {
+  security_group_id            = aws_security_group.alb.id
+  description                  = "forward and health check to api tasks"
+  referenced_security_group_id = aws_security_group.api.id
+  ip_protocol                  = "tcp"
+  from_port                    = 8080
+  to_port                      = 8080
+}
 
 # ---- api（ECS タスク）-------------------------------------------------------
 # 手作業のときの life-api-sg はコンソールの CloudFormation スタックが持っているので、
@@ -8,19 +37,18 @@
 resource "aws_security_group" "api" {
   name        = "life-api-ecs"
   description = "life-api ECS tasks"
-  vpc_id      = data.aws_vpc.default.id
+  vpc_id      = local.vpc_id
 }
 
-# 8080 への入口。ALB を立てるまでは許可した CIDR からタスクの IP を直接叩く。
-resource "aws_vpc_security_group_ingress_rule" "api_http" {
-  for_each = toset(var.api_allowed_cidrs)
-
-  security_group_id = aws_security_group.api.id
-  description       = "api (no ALB yet)"
-  cidr_ipv4         = each.value
-  ip_protocol       = "tcp"
-  from_port         = 8080
-  to_port           = 8080
+# 8080 への入口は ALB の SG からだけ。タスクにはパブリック IP が付いたままだが、
+# 外から直接は叩けない（ALB を立てるまでは自宅 IP の CIDR を開けていた。life#48 で外した）。
+resource "aws_vpc_security_group_ingress_rule" "api_from_alb" {
+  security_group_id            = aws_security_group.api.id
+  description                  = "HTTP from ALB"
+  referenced_security_group_id = aws_security_group.alb.id
+  ip_protocol                  = "tcp"
+  from_port                    = 8080
+  to_port                      = 8080
 }
 
 # 外向きは全部通す。ECR の pull、SSM、CloudWatch Logs、RDS がここを通る
@@ -37,7 +65,7 @@ resource "aws_vpc_security_group_egress_rule" "api_all" {
 resource "aws_security_group" "db" {
   name        = "life-api-rds"
   description = "life-api RDS PostgreSQL"
-  vpc_id      = data.aws_vpc.default.id
+  vpc_id      = local.vpc_id
 }
 
 # 5432 は api の SG からだけ。CIDR ではなく SG を参照しているので、タスクの IP が

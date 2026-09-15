@@ -177,7 +177,7 @@ entries の CRUD は `entries` テーブルへの読み書き（`entries.go`）�
 件数と位置は `limit`（1〜100）と `offset` でずらす。
 
 `/health` はプロセスが生きているかに加えて DB への疎通も見る。繋がらないときは 503 を
-返すので、ALB のターゲットグループから外れる（W4 でそこに繋ぐ）。
+返すので、ALB のターゲットグループから外れる（life#48 で繋いだ）。
 
 POST / PUT は `-H 'Content-Type: application/json'` が必須。
 `-d` だけだと curl は form-urlencoded で送るため、Goa が 415 を返す。
@@ -248,32 +248,33 @@ curl -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' local
 
 ## インフラ（Terraform）
 
-AWS 側の構成は `terraform/` にある。W1〜W2 でコンソールと CLI で手作業したものを、
-そのまま Terraform に書き起こした（life#40）。ALB と独自 VPC はまだ無い（W4）。
-デフォルト VPC のパブリックサブネットに全部置き、api のタスクにはパブリック IP を付けて、
-`terraform.tfvars` に書いた CIDR（自宅 IP）からだけ 8080 を叩ける。
+AWS 側の構成は `terraform/` にある。W1〜W2 でコンソールと CLI で手作業したものを
+そのまま Terraform に書き起こし（life#40）、W4 で ALB を前に置いた（life#48）。
+独自 VPC はまだ無く（life#49）、デフォルト VPC のパブリックサブネットに全部置いている。
+外からの入口は ALB の 80 だけで、api の 8080 には ALB の SG からしか届かない。
 
 ```
-[自宅 IP] --8080--> ECS Fargate (life-api) --5432--> RDS PostgreSQL (life-db)
-                        ↑ pull                ↑ DATABASE_URL / JWT_SECRET
-                       ECR              SSM Parameter Store
+[誰でも] --80--> ALB (life-api) --8080--> ECS Fargate (life-api) --5432--> RDS PostgreSQL (life-db)
+                                              ↑ pull                ↑ DATABASE_URL / JWT_SECRET
+                                             ECR              SSM Parameter Store
 ```
 
 | ファイル | 中身 |
 | --- | --- |
+| `alb.tf` | ALB `life-api`（internet-facing、HTTP 80 のみ）、ターゲットグループ（`target_type = "ip"`、ヘルスチェック `/health`）、リスナー |
 | `ecr.tf` | リポジトリ `life-api` と、新しい 10 世代だけ残すライフサイクル |
-| `ecs.tf` | クラスタ `life`、タスク定義 `life-api` / `life-migrate`、サービス `life-api` |
+| `ecs.tf` | クラスタ `life`、タスク定義 `life-api` / `life-migrate`、サービス `life-api`（起動したタスクをターゲットグループに登録） |
 | `rds.tf` / `ssm.tf` | RDS `life-db`（db.t4g.micro）と、SSM パラメータ `/life-api/database-url`（接続文字列）/ `/life-api/jwt-secret`（JWT の署名鍵。Terraform が生成し、api にだけ渡す） |
-| `sg.tf` | SG `life-api-ecs`（8080 は許可 CIDR から）と `life-api-rds`（5432 は api の SG からだけ） |
+| `sg.tf` | SG `life-api-alb`（80 は全開、出口は api の 8080 だけ）/ `life-api-ecs`（8080 は ALB の SG からだけ）/ `life-api-rds`（5432 は api の SG からだけ） |
 | `iam.tf` | タスク実行ロール `ecsTaskExecutionRole`（ECR pull / ログ / SSM 読み取り） |
 | `logs.tf` | ロググループ `/ecs/life-api`（30 日で消す） |
+| `data.tf` | デフォルト VPC の参照と、ネットワークの参照を 1 箇所に寄せた locals（`vpc_id` / `public_subnet_ids`） |
 
 ### 使い方
 
 ```sh
 export AWS_PROFILE=life
 cd terraform
-cp terraform.tfvars.example terraform.tfvars   # 自宅 IP を書く（curl https://checkip.amazonaws.com）
 terraform init
 terraform plan
 terraform apply                                 # RDS 込みで 5〜10 分かかる
@@ -281,6 +282,9 @@ terraform apply                                 # RDS 込みで 5〜10 分かか
 
 state は手元の `terraform.tfstate`（gitignore 済み）。DB のパスワードが平文で入るので、
 リポジトリにもイメージにも入れない（`.dockerignore` で `terraform/` ごと外している）。
+
+`terraform.tfvars` は要らない。ALB を立てるまでは自宅 IP を `api_allowed_cidrs` に書いて
+8080 を開けていたが、入口が ALB になったので life#48 で変数ごと外した。
 
 ### スキーマ適用と起動・停止
 
@@ -291,23 +295,38 @@ VPC 内から RDS に繋ぐので、09/05 のように自宅 IP を RDS の SG �
 terraform output -raw migrate_command | sh      # 単発タスクを起動（終了コード 0 で成功）
 aws logs tail /ecs/life-api --log-stream-name-prefix migrate --since 10m   # ログで確認
 
-terraform apply -var api_desired_count=1        # api を 1 タスク起動
-terraform apply                                 # 確認が済んだら 0 に戻す（既定値が 0）
-terraform apply -var db_enabled=false           # RDS と接続文字列を消す（ECR / ECS / SG / IAM は残る）
+aws ecs update-service --cluster life --service life-api --desired-count 1   # api を 1 タスク起動
+curl "$(terraform output -raw api_url)/health"  # ALB 経由。ターゲットが healthy になるまで 1 分ほど
+aws ecs update-service --cluster life --service life-api --desired-count 0   # 確認が済んだら止める
+terraform apply -var db_enabled=false           # RDS と接続文字列を消す（ECR / ECS / SG / IAM / ALB は残る）
 ```
 
-**desired count は Terraform の変数で持つ**。CLI で 1 にしても、次の `terraform apply` で 0 に戻る。
+**desired count は Terraform の変数（既定 0）で持ち、起動と停止は CLI でやる。**
+`terraform apply -var api_desired_count=1` でも起動できるが、CLI なら state の desired が 0 のままなので、
+止めたあとの `terraform plan` に差分が出ない（09/14）。CLI で 1 にしても次の `terraform apply` で 0 に戻る。
 「使い終わったら止める」を既定にするための挙動なので、そのまま使う。
 
-タスクのパブリック IP は起動のたびに変わる。
+URL は `terraform output -raw api_url`（`http://<ALB の DNS 名>`）。タスクを起動し直しても変わらないので、
+「打鍵確認（curl）」の `localhost:8080` をこれに読み替えればそのまま通る。
+タスクのパブリック IP は起動のたびに変わるうえ、8080 には ALB の SG からしか届かないので、
+IP を引いて直接叩く手順は無くした。
 
-```sh
-task=$(aws ecs list-tasks --cluster life --service-name life-api --query 'taskArns[0]' --output text)
-eni=$(aws ecs describe-tasks --cluster life --tasks "$task" \
-  --query 'tasks[0].attachments[0].details[?name==`networkInterfaceId`].value' --output text)
-aws ec2 describe-network-interfaces --network-interface-ids "$eni" \
-  --query 'NetworkInterfaces[0].Association.PublicIp' --output text
-```
+### ALB を前に置いたときの判断（life#48）
+
+- **ALB を独自 VPC より先にした。** 「人に見せられる」に直結するのは固定の URL で、それをくれるのが ALB。
+  遅れたときに削るのは VPC の側。VPC / サブネットの参照は `data.tf` の locals（`vpc_id` / `public_subnet_ids`）に
+  寄せてあり、VPC を移すときはそこを差し替えるだけで、SG / ECS / RDS / ALB のファイルは触らない
+- **入口は SG の参照で連鎖させる。** CIDR で開けるのは ALB の 80 だけ。api の 8080 は ALB の SG から、
+  RDS の 5432 は api の SG から。ALB のノードやタスクの IP が変わっても効く。
+  タスクのパブリック IP は残す（NAT を持たないので、ECR / SSM / ログへの出口として要る）が、入口としては使えない
+- **HTTP のみ。** HTTPS と独自ドメインは goals に無い。証明書と Route 53 が要るので、必要になったときに足す
+- **ヘルスチェックは `/health`。** DB への疎通も見るので、DB に繋がらないタスクは 503 で外れる。
+  起動時に DB へ繋ぎに行く分、サービスに `health_check_grace_period_seconds = 60` の猶予を付けた。
+  ターゲットの登録解除は 30 秒（既定の 300 秒だと desired 0 に戻すときに待たされる）
+- **トグルは付けない。** 立てた瞬間から課金されるが、消すと DNS 名が変わって渡した URL が死ぬ。
+  W4 の間は立てたままにし、残すかは週末に決める
+- **サービスに `load_balancer` を後から付けても作り直しにはならない。** issue では作り直しを見込んで desired 0 の
+  タイミングで足したが、provider 6.x の plan は `update in-place`（`health_check_grace_period_seconds` も同時に in-place）だった
 
 ### イメージの更新
 
@@ -343,6 +362,7 @@ aws ecs update-service --cluster life --service life-api --force-new-deployment
 
 | リソース | 目安 | 止め方 |
 | --- | --- | --- |
+| ALB | ~$0.03/時（~$20/月）+ LCU | 消すしかない（DNS 名が変わる）。W4 の間は残す |
 | RDS db.t4g.micro + 20GB gp3 | ~$0.02/時（~$15/月） | `-var db_enabled=false` で消す |
 | Fargate 0.25 vCPU / 0.5 GB | ~$0.02/時 | desired 0（既定） |
 | ECR / ログ / SSM Standard | ほぼ 0 | - |

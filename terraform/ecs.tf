@@ -129,13 +129,26 @@ resource "aws_ecs_service" "api" {
   launch_type     = "FARGATE"
 
   network_configuration {
-    subnets         = data.aws_subnets.default.ids
+    subnets         = local.public_subnet_ids
     security_groups = [aws_security_group.api.id]
-    # NAT が無いので、ECR から pull するにも外から叩くにもパブリック IP が要る。
+    # NAT が無いので、ECR から pull するにも SSM やログに出ていくにもパブリック IP が要る。
     # サブネット側の MapPublicIpOnLaunch とは別に、ここでも有効にしないと
     # CannotPullContainerError で起動と停止を繰り返す（08/29 の TIL）。
+    # 外からの入口は SG で ALB に絞っているので、パブリック IP が付いていても直接は叩けない。
     assign_public_ip = true
   }
+
+  # 起動したタスクの IP を ALB のターゲットグループに登録する。
+  # container_name はタスク定義の name と一致させる。
+  load_balancer {
+    target_group_arn = aws_lb_target_group.api.arn
+    container_name   = "life-api"
+    container_port   = 8080
+  }
+
+  # 起動直後にヘルスチェックが通らなくても、この秒数は unhealthy 扱いにしない。
+  # api は起動時に DB へ繋ぎに行くので、その分の猶予。
+  health_check_grace_period_seconds = 60
 
   # 新リビジョンのタスクが起動できないときに、旧リビジョンへ自動で戻す。
   deployment_circuit_breaker {
@@ -147,5 +160,7 @@ resource "aws_ecs_service" "api" {
 
   enable_ecs_managed_tags = true
 
-  depends_on = [aws_ecs_cluster_capacity_providers.life]
+  # ターゲットグループはリスナーに紐付いてからでないとサービスに付けられない
+  # （"does not have an associated load balancer" で落ちる）。
+  depends_on = [aws_ecs_cluster_capacity_providers.life, aws_lb_listener.http]
 }
