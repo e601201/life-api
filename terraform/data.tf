@@ -1,31 +1,12 @@
 data "aws_caller_identity" "current" {}
 
-# 独自 VPC に移る（life#49）までは、デフォルト VPC のパブリックサブネットに全部置く。
-# 自前で作らず参照だけにしているのは、ここで時間を溶かさない方針（goals.md）のため。
-#
-# デフォルト VPC は削除できるし、削除されたまま気づかないことがある（08/29 に実際に無かった）。
-# 見つからずにここで落ちたら `aws ec2 create-default-vpc` で一式復元する。無料。
-data "aws_vpc" "default" {
-  default = true
-}
-
-data "aws_subnets" "default" {
-  filter {
-    name   = "vpc-id"
-    values = [data.aws_vpc.default.id]
-  }
-  filter {
-    name   = "default-for-az"
-    values = ["true"]
-  }
-}
-
 locals {
-  # ネットワークの参照はこの 2 つに寄せる。SG / ECS / RDS / ALB は data を直接見ない。
-  # 独自 VPC に移す（life#49）ときは、ここの右辺を resource に差し替えるだけで済ませる。
-  # ALB は 2 つ以上の AZ にまたがるサブネットが要る（デフォルト VPC は 1a / 1c / 1d の 3 つ）。
-  vpc_id            = data.aws_vpc.default.id
-  public_subnet_ids = data.aws_subnets.default.ids
+  # ネットワークの参照はこの 2 つに寄せる。SG / ECS / RDS / ALB は vpc.tf の resource を直接見ない。
+  # life#49 までは右辺がデフォルト VPC の data（aws_vpc.default / aws_subnets.default）で、
+  # 独自 VPC に移すときはここの右辺を差し替えるだけで済んだ。
+  # public_subnet_ids は for_each のキー順（a, c）で並ぶので、apply のたびに順番が変わることはない。
+  vpc_id            = aws_vpc.life.id
+  public_subnet_ids = [for s in aws_subnet.public : s.id]
 
   account_id = data.aws_caller_identity.current.account_id
 

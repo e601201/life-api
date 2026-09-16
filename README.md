@@ -249,8 +249,9 @@ curl -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' local
 ## インフラ（Terraform）
 
 AWS 側の構成は `terraform/` にある。W1〜W2 でコンソールと CLI で手作業したものを
-そのまま Terraform に書き起こし（life#40）、W4 で ALB を前に置いた（life#48）。
-独自 VPC はまだ無く（life#49）、デフォルト VPC のパブリックサブネットに全部置いている。
+そのまま Terraform に書き起こし（life#40）、W4 で ALB を前に置き（life#48）、
+デフォルト VPC から独自 VPC に移した（life#49）。VPC はパブリックサブネット 2 つだけで、
+ALB / ECS タスク / RDS を全部そこに置く。
 外からの入口は ALB の 80 だけで、api の 8080 には ALB の SG からしか届かない。
 
 ```
@@ -268,7 +269,8 @@ AWS 側の構成は `terraform/` にある。W1〜W2 でコンソールと CLI �
 | `sg.tf` | SG `life-api-alb`（80 は全開、出口は api の 8080 だけ）/ `life-api-ecs`（8080 は ALB の SG からだけ）/ `life-api-rds`（5432 は api の SG からだけ） |
 | `iam.tf` | タスク実行ロール `ecsTaskExecutionRole`（ECR pull / ログ / SSM 読み取り） |
 | `logs.tf` | ロググループ `/ecs/life-api`（30 日で消す） |
-| `data.tf` | デフォルト VPC の参照と、ネットワークの参照を 1 箇所に寄せた locals（`vpc_id` / `public_subnet_ids`） |
+| `vpc.tf` | VPC `life`（10.0.0.0/16）、パブリックサブネット `life-public-a` / `life-public-c`、IGW、0.0.0.0/0 を IGW に向けたルートテーブル |
+| `data.tf` | アカウント ID と、ネットワークの参照を 1 箇所に寄せた locals（`vpc_id` / `public_subnet_ids`）。SG / ECS / RDS / ALB はここ経由で VPC を見る |
 
 ### 使い方
 
@@ -328,6 +330,32 @@ IP を引いて直接叩く手順は無くした。
 - **サービスに `load_balancer` を後から付けても作り直しにはならない。** issue では作り直しを見込んで desired 0 の
   タイミングで足したが、provider 6.x の plan は `update in-place`（`health_check_grace_period_seconds` も同時に in-place）だった
 
+### 独自 VPC に移したときの判断（life#49）
+
+```
+VPC life  10.0.0.0/16（DNS 解決・ホスト名 有効）
+├── life-public-a  10.0.0.0/24  ap-northeast-1a  ┐ ALB・ECS タスク・RDS のサブネットグループはこの 2 つ
+└── life-public-c  10.0.1.0/24  ap-northeast-1c  ┘ ルートテーブル life-public: 0.0.0.0/0 → IGW
+```
+
+- **パブリックサブネットだけ。プライベートサブネットも NAT ゲートウェイも VPC エンドポイントも持たない。**
+  タスクをプライベートに置くと、ECR の pull / SSM / CloudWatch Logs への出口が別に要る。
+  NAT ゲートウェイは ~$0.062/時（月 45 ドル）+ 転送量、VPC エンドポイントは ecr.api / ecr.dkr / ssm / logs の
+  4 つ × AZ 数で、1 AZ に絞っても ~$0.056/時。どちらも ALB（~$0.03/時）より高い。
+  入口は SG で ALB だけに絞れていて、タスクにパブリック IP が付いていても直接は叩けない（09/15 に 8080 直叩きの
+  タイムアウトを確認済み）。「タスクを外から隠す」ためだけに ALB より高いものを持つのは、学習目的とコストの釣り合いが取れない
+- **構成はデフォルト VPC と同じで、自分で書いただけ。** サブネットは 2 つ（ALB が 2 AZ 以上を要求する。デフォルト VPC は
+  1a / 1c / 1d の 3 つだった）。CIDR は 10.0.0.0/16（デフォルトの 172.31.0.0/16 と重ならない）。
+  DNS 解決とホスト名はデフォルト VPC と同じく有効にした。解決は ECR / SSM / RDS の名前を VPC 内から引くのに要り、
+  ホスト名は今は使わないが、既定の false にして挙動が変わる箇所を増やさない
+- **移行で触ったのは `data.tf` の locals の右辺だけ。** SG / ECS / RDS / ALB のファイルは変えていない（life#48 で
+  参照を寄せておいた効果）。ただし `vpc_id` を持つ SG とターゲットグループは作り直しになる。
+  **DB のサブネットグループと ALB は provider が「in-place 更新」で計画するが、AWS 側が VPC をまたぐ変更を受け付けない**ので
+  `-replace` で作り直す（手順は `terraform/RUNBOOK.md`）。ALB を作り直すので DNS 名（`api_url`）は変わる。
+  RDS は消してあったので巻き込まれるものが無かった
+- **デフォルト VPC は消していない。** もう参照していないが、残しても課金は無く、消すと戻す手間
+  （`aws ec2 create-default-vpc`）だけ増える
+
 ### イメージの更新
 
 `--platform linux/amd64` と `--provenance=false` の 2 つは省かない（08/29・09/05 の TIL）。
@@ -363,6 +391,7 @@ aws ecs update-service --cluster life --service life-api --force-new-deployment
 | リソース | 目安 | 止め方 |
 | --- | --- | --- |
 | ALB | ~$0.03/時（~$20/月）+ LCU | 消すしかない（DNS 名が変わる）。W4 の間は残す |
+| VPC / サブネット / IGW / ルートテーブル | 0 | - （NAT ゲートウェイと VPC エンドポイントは持たない） |
 | RDS db.t4g.micro + 20GB gp3 | ~$0.02/時（~$15/月） | `-var db_enabled=false` で消す |
 | Fargate 0.25 vCPU / 0.5 GB | ~$0.02/時 | desired 0（既定） |
 | ECR / ログ / SSM Standard | ほぼ 0 | - |

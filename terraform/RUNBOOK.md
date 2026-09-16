@@ -68,6 +68,29 @@ terraform plan                                                         # No chan
 terraform plan -var db_enabled=false -out=/tmp/db.tfplan && terraform apply /tmp/db.tfplan   # destroy 2 件（RDS と database-url）
 ```
 
+## 独自 VPC に移したとき（life#49、2026-09-16）
+
+plan は「22 to add, 1 to change, 12 to destroy」。`vpc_id` を持つ SG とターゲットグループ（とその配下のルール・リスナー）は
+provider が作り直しにするが、**DB のサブネットグループと ALB は「in-place 更新」で計画される**。どちらも AWS 側が
+VPC をまたぐ変更を受け付けない（サブネットグループは "not in the same Vpc"、ALB はサブネット / SG の付け替え）ので、
+`-replace` で作り直しを明示する。ALB が作り直しになるので DNS 名（`api_url`）は変わる。
+ECS サービスはサブネット / SG / ターゲットグループの差し替えを in-place で受ける。RDS は消してある前提（W4 の運用どおり）。
+
+```sh
+terraform plan -replace=aws_lb.api -replace=aws_db_subnet_group.life -out=/tmp/49.tfplan
+terraform apply /tmp/49.tfplan                                         # RDS 込みで 6〜10 分
+terraform output -raw migrate_command | sh                             # 新しいサブネット / SG で単発タスク
+aws logs tail /ecs/life-api --log-stream-name-prefix migrate --since 10m   # migrated: version 4
+aws ecs update-service --cluster life --service life-api --desired-count 1
+aws ecs wait services-stable --cluster life --services life-api
+bash /tmp/life-api-48-check.sh "$(terraform output -raw api_url)"      # 09/15 と同じ 22 項目（URL は新しい ALB）
+aws ecs update-service --cluster life --service life-api --desired-count 0
+terraform plan                                                         # No changes
+terraform plan -var db_enabled=false -out=/tmp/db.tfplan && terraform apply /tmp/db.tfplan   # destroy 2 件（RDS と database-url）
+aws ec2 describe-security-groups --filters Name=vpc-id,Values=vpc-0f17b1e883bdd5f40 \
+  --query 'SecurityGroups[].GroupName'                                 # デフォルト VPC に default だけ残っていること
+```
+
 ## 次に AWS で動かすとき
 
 1 と 4 は要らないので短くなる。
