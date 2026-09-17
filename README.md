@@ -246,6 +246,57 @@ curl -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' local
   -d '{"title":"","entry_date":"banana","kind":"til"}'
 ```
 
+### ログ（1 リクエスト 1 行の JSON）
+
+出力先は標準出力。端末なら色付きのテキスト、それ以外（`docker compose logs`、Fargate → CloudWatch Logs）は
+JSON になる（`cmd/life/main.go` の `log.IsTerminal()`。Goa の雛形のまま）。
+ローカルで JSON を見たければ `go run ./cmd/life 2>&1 | cat` のようにパイプに通す。
+
+リクエストは終わったときに 1 行だけ出す（`reqlog.go` の `RequestLog`。雛形の `log.HTTP` は
+start / end の 2 行で request id も自前の乱数だったので差し替えた。life#50）。
+
+```json
+{"time":"2026-09-17T12:00:00Z","level":"info","request_id":"Root=1-6aaa84c0-0123456789abcdef01234567","msg":"request","method":"GET","path":"/entries","status":200,"duration_ms":4,"bytes":213,"remote_addr":"203.0.113.9","user_id":1}
+```
+
+| キー | 中身 |
+| --- | --- |
+| `request_id` | ALB が付ける `X-Amzn-Trace-Id`（`Root=1-<時刻の hex>-<乱数>`）。ALB を通らないとき（ローカル・テスト）は自前の乱数。同じリクエストの中で出る他の行（`users.login`、`ERROR id=...`）にも同じ値が付く |
+| `method` / `path` | クエリ文字列は含めない（検索語が入る） |
+| `status` / `duration_ms` / `bytes` | レスポンスのステータス・所要時間（ミリ秒）・書いたバイト数 |
+| `remote_addr` | クライアントの IP。`X-Forwarded-For` の末尾（ALB が足した値。先頭側はクライアントが書ける）、無ければ接続元 |
+| `user_id` | JWT の `sub`。`JWTAuth` を通ったリクエストにだけ付く（401 や `POST /users/login` には無い）。サービスの行にも付く |
+
+パスワード・トークン本体・リクエストボディは出さない（`-debug` のときだけ `debug.HTTP` がボディを
+別の行に出す。`users` はそこでも対象外）。ハンドラが panic したときは `status` 500 と `panic: true` で
+行を残し、スタックは net/http が stderr に出す。
+
+CloudWatch Logs Insights（ロググループ `/ecs/life-api`）で `user_id` と `status` で絞る例:
+
+```
+fields @timestamp, method, path, status, duration_ms, request_id
+| filter msg = "request" and user_id = 1 and status >= 400
+| sort @timestamp desc
+| limit 50
+```
+
+CLI からは `start-query` → `get-query-results`（結果が揃うまで数秒。`status` が `Complete` になるまで叩き直す）:
+
+```sh
+QUERY_ID=$(aws logs start-query --log-group-name /ecs/life-api \
+  --start-time $(( $(date +%s) - 3600 )) --end-time $(date +%s) \
+  --query-string 'fields @timestamp, method, path, status, duration_ms, request_id | filter msg = "request" and user_id = 1 and status >= 400 | sort @timestamp desc | limit 50' \
+  --query queryId --output text)
+aws logs get-query-results --query-id "$QUERY_ID"
+```
+
+ローカルで request id の受け渡しを見るには、ALB の代わりにヘッダを自分で付ける:
+
+```sh
+curl -H 'X-Amzn-Trace-Id: Root=1-00000000-000000000000000000000000' localhost:8080/health
+docker compose logs --no-log-prefix api | grep '"request"' | tail -1 | jq .   # request_id に上の値が入る
+```
+
 ## インフラ（Terraform）
 
 AWS 側の構成は `terraform/` にある。W1〜W2 でコンソールと CLI で手作業したものを
@@ -268,7 +319,7 @@ ALB / ECS タスク / RDS を全部そこに置く。
 | `rds.tf` / `ssm.tf` | RDS `life-db`（db.t4g.micro）と、SSM パラメータ `/life-api/database-url`（接続文字列）/ `/life-api/jwt-secret`（JWT の署名鍵。Terraform が生成し、api にだけ渡す） |
 | `sg.tf` | SG `life-api-alb`（80 は全開、出口は api の 8080 だけ）/ `life-api-ecs`（8080 は ALB の SG からだけ）/ `life-api-rds`（5432 は api の SG からだけ） |
 | `iam.tf` | タスク実行ロール `ecsTaskExecutionRole`（ECR pull / ログ / SSM 読み取り） |
-| `logs.tf` | ロググループ `/ecs/life-api`（30 日で消す） |
+| `logs.tf` | ロググループ `/ecs/life-api`（30 日で消す）。中身の形は上の「ログ」の節 |
 | `vpc.tf` | VPC `life`（10.0.0.0/16）、パブリックサブネット `life-public-a` / `life-public-c`、IGW、0.0.0.0/0 を IGW に向けたルートテーブル |
 | `data.tf` | アカウント ID と、ネットワークの参照を 1 箇所に寄せた locals（`vpc_id` / `public_subnet_ids`）。SG / ECS / RDS / ALB はここ経由で VPC を見る |
 

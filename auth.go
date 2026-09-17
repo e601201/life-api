@@ -125,7 +125,12 @@ func unauthorized(msg string) error {
 type userIDKey struct{}
 
 // ContextWithUserID は認証済みのユーザ ID を ctx に載せる。
+//
+// ログにも同じ ID を付ける。この ctx から出る行（サービスの log.Printf）には user_id が
+// 付き、RequestLog が最後に出す 1 行にも載る（reqlog.go）。パスワードやトークン本体は載せない。
 func ContextWithUserID(ctx context.Context, id int64) context.Context {
+	setLogUserID(ctx, id)
+	ctx = log.With(ctx, log.KV{K: UserIDLogKey, V: id})
 	return context.WithValue(ctx, userIDKey{}, id)
 }
 

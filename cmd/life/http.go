@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	life "github.com/e601201/life-api"
 	entries "github.com/e601201/life-api/gen/entries"
 	health "github.com/e601201/life-api/gen/health"
 	entriessvr "github.com/e601201/life-api/gen/http/entries/server"
@@ -63,8 +64,8 @@ func handleHTTPServer(ctx context.Context, u *url.URL, healthEndpoints *health.E
 		tagsServer    *tagssvr.Server
 	)
 	{
-		eh := errorHandler(ctx)
-		ef := errorFormatter(ctx)
+		eh := errorHandler()
+		ef := errorFormatter()
 		healthServer = healthsvr.New(healthEndpoints, mux, dec, enc, eh, ef)
 		usersServer = userssvr.New(usersEndpoints, mux, dec, enc, eh, ef)
 		entriesServer = entriessvr.New(entriesEndpoints, mux, dec, enc, eh, ef)
@@ -82,7 +83,8 @@ func handleHTTPServer(ctx context.Context, u *url.URL, healthEndpoints *health.E
 		// Log query and response bodies if debug logs are enabled.
 		handler = debug.HTTP()(handler)
 	}
-	handler = log.HTTP(ctx)(handler)
+	// 1 リクエスト 1 行のログと request id（reqlog.go）。雛形の log.HTTP から差し替えた。
+	handler = life.RequestLog(ctx)(handler)
 	// ボディの読み取り上限。最外周に置いて全エンドポイントに効かせる。
 	// 上限を超えたリクエストはデコードの時点で失敗し、400 で返る。
 	handler = http.MaxBytesHandler(handler, maxRequestBody)
@@ -144,7 +146,11 @@ func handleHTTPServer(ctx context.Context, u *url.URL, healthEndpoints *health.E
 //
 // レスポンスとログの両方に同じ ID を出しているので、問い合わせを受けたら
 // その ID でログを引ける。
-func errorFormatter(logCtx context.Context) func(context.Context, error) goahttp.Statuser {
+//
+// ログはサーバ全体の logCtx ではなく、生成コードが渡してくるリクエストの ctx に出す。
+// RequestLog（reqlog.go）がそこに request_id を載せているので、エラーの行とリクエストの行が
+// 同じ ID で繋がる。
+func errorFormatter() func(context.Context, error) goahttp.Statuser {
 	return func(ctx context.Context, err error) goahttp.Statuser {
 		var serr *goa.ServiceError
 		if errors.As(err, &serr) {
@@ -153,7 +159,7 @@ func errorFormatter(logCtx context.Context) func(context.Context, error) goahttp
 			return goahttp.NewErrorResponse(ctx, err)
 		}
 		fault := goa.Fault("internal error")
-		log.Printf(logCtx, "ERROR id=%s: %s", fault.ID, err.Error())
+		log.Printf(ctx, "ERROR id=%s: %s", fault.ID, err.Error())
 		return goahttp.NewErrorResponse(ctx, fault)
 	}
 }
@@ -161,8 +167,8 @@ func errorFormatter(logCtx context.Context) func(context.Context, error) goahttp
 // errorHandler returns a function that writes and logs the given error.
 // The function also writes and logs the error unique ID so that it's possible
 // to correlate.
-func errorHandler(logCtx context.Context) func(context.Context, http.ResponseWriter, error) {
+func errorHandler() func(context.Context, http.ResponseWriter, error) {
 	return func(ctx context.Context, w http.ResponseWriter, err error) {
-		log.Printf(logCtx, "ERROR: %s", err.Error())
+		log.Printf(ctx, "ERROR: %s", err.Error())
 	}
 }

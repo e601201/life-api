@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	entries "github.com/e601201/life-api/gen/entries"
@@ -23,12 +24,39 @@ import (
 	userssvr "github.com/e601201/life-api/gen/http/users/server"
 	tags "github.com/e601201/life-api/gen/tags"
 	users "github.com/e601201/life-api/gen/users"
+	"goa.design/clue/log"
 	goahttp "goa.design/goa/v3/http"
 )
+
+// logBuffer は RequestLog の出力先。サーバのゴルーチンから書き、テストから読むので鍵を掛ける。
+type logBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *logBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *logBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
 
 // newTestServer は users / entries / tags を cmd/life/http.go と同じ生成コードでマウントした
 // サーバを立てる。エラーの整形は Goa の既定（宣言したエラーは design のステータス）。
 func newTestServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	srv, _ := newTestServerWithLog(t)
+	return srv
+}
+
+// newTestServerWithLog は newTestServer に加えて、RequestLog（reqlog.go）が書いた
+// JSON のログも返す。本番と同じくミドルウェアを最外周に掛けてある。
+func newTestServerWithLog(t *testing.T) (*httptest.Server, *logBuffer) {
 	t.Helper()
 	resetTables(t)
 
@@ -46,9 +74,11 @@ func newTestServer(t *testing.T) *httptest.Server {
 		goahttp.RequestDecoder, goahttp.ResponseEncoder, eh, ef)
 	tagssvr.Mount(mux, tagsServer)
 
-	srv := httptest.NewServer(mux)
+	logs := &logBuffer{}
+	logCtx := log.Context(context.Background(), log.WithOutput(logs), log.WithFormat(log.FormatJSON))
+	srv := httptest.NewServer(RequestLog(logCtx)(mux))
 	t.Cleanup(srv.Close)
-	return srv
+	return srv, logs
 }
 
 // call はリクエストを 1 本投げ、レスポンスと JSON のボディを返す。ボディが
@@ -435,5 +465,65 @@ func TestHTTPSearch(t *testing.T) {
 			resp, body := call(t, srv, http.MethodGet, "/entries"+tt.query, auth, nil)
 			requireStatus(t, resp, body, http.StatusBadRequest, "")
 		})
+	}
+}
+
+func TestHTTPRequestLogUserID(t *testing.T) {
+	srv, logs := newTestServerWithLog(t)
+	authorization, userID := login(t, srv, "alice@example.com", "correct horse")
+
+	// 認証済みのリクエストには JWT の sub が user_id として付く。
+	resp, body := call(t, srv, http.MethodGet, "/users/me", authorization, nil)
+	requireStatus(t, resp, body, http.StatusOK, "")
+	// 401 には付かない。
+	resp, body = call(t, srv, http.MethodGet, "/entries", "", nil)
+	requireStatus(t, resp, body, http.StatusUnauthorized, "unauthorized")
+
+	out := logs.String()
+	lines := requestLines(t, out)
+	// 登録・ログイン・me・entries の 4 本、それぞれ 1 行。
+	if len(lines) != 4 {
+		t.Fatalf("request の行数 = %d, want 4:\n%s", len(lines), out)
+	}
+	for i, want := range []struct {
+		path   string
+		status float64
+		user   any // nil なら user_id が無いこと
+	}{
+		{path: "/users", status: 201},
+		{path: "/users/login", status: 200}, // ログインは JWTAuth を通らないので user_id は無い
+		{path: "/users/me", status: 200, user: userID},
+		{path: "/entries", status: 401},
+	} {
+		l := lines[i]
+		if l["path"] != want.path || l["status"] != want.status {
+			t.Errorf("%d 本目: path / status = %v / %v, want %s / %v", i+1, l["path"], l["status"], want.path, want.status)
+		}
+		if got, ok := l["user_id"]; ok != (want.user != nil) || (ok && got != want.user) {
+			t.Errorf("%d 本目（%s）: user_id = %v (ok=%v), want %v", i+1, want.path, got, ok, want.user)
+		}
+	}
+
+	// サービスの行（users.me）にも同じ request_id と user_id が付く。
+	me := lines[2]
+	var found bool
+	for _, l := range parseLogLines(t, out) {
+		if l["msg"] == "users.me" {
+			found = true
+			if l["request_id"] != me["request_id"] || l["user_id"] != userID {
+				t.Errorf("users.me の行に request_id / user_id が引き継がれていない: %v", l)
+			}
+		}
+	}
+	if !found {
+		t.Errorf("users.me の行が無い:\n%s", out)
+	}
+
+	// パスワードとトークン本体はどの行にも出ない。
+	token := strings.TrimPrefix(authorization, "Bearer ")
+	for _, secret := range []string{"correct horse", token} {
+		if strings.Contains(out, secret) {
+			t.Errorf("ログに秘密が出ている（%.8s...）:\n%s", secret, out)
+		}
 	}
 }
