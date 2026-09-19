@@ -1,13 +1,28 @@
 # life-api
 
 いま Markdown で書いている TIL / 日誌を、API として読み書きできるようにするサービス。
-リソースは `entries`（TIL）/ `tags` / `users` の3つで、JWT 認証とタグ・全文・期間での検索を持つ。
+リソースは `entries`（TIL）/ `tags` / `users` の3つで、JWT 認証とタグ・部分一致・期間での検索を持つ。
 Goa の design-first で DSL から OpenAPI を生成し、Go + ECS Fargate + RDS PostgreSQL 上で動かす。
+
+## 構成
+
+```
+[誰でも] --80--> ALB (life-api) --8080--> ECS Fargate (life-api) --5432--> RDS PostgreSQL (life-db)
+                                              ↑ pull                ↑ DATABASE_URL / JWT_SECRET
+                                             ECR              SSM Parameter Store
+```
+
+- **Go + Goa**: 入社先（フラー）と同じ言語とフレームワーク
+- **ALB + ECS Fargate + RDS PostgreSQL + ECR**: 日本の企業で最もよく使われる構成で、実務への直結度が最も高い。
+  GCP + Kubernetes の経験がそのまま転用できる（Pod → Task、Deployment → Service、Ingress → ALB + ターゲットグループ）
+
+個々の判断の理由は「インフラ（Terraform）」の各「判断」の節と、「認証」「tags」「検索」の節に書いてある。
 
 ## 開発
 
 ```
-mise install                                    # Go のバージョンを揃える
+mise install                                    # Go と Terraform のバージョンを揃える
+go install goa.design/goa/v3/cmd/goa@v3.30.0    # goa CLI（go.mod の goa と同じ版）。DSL を変えないなら次の行ごと飛ばしてよい（gen/ はコミット済み）
 goa gen github.com/e601201/life-api/design      # design.go から gen/ を生成
 docker compose up -d db                         # DB だけ先に立ち上げる
 export DATABASE_URL='postgres://life:life@localhost:5432/life?sslmode=disable'
@@ -113,6 +128,8 @@ docker compose exec db psql -U life -d postgres -c 'CREATE DATABASE life_test'
 TEST_DATABASE_URL='postgres://life:life@localhost:5432/life_test?sslmode=disable' go test ./...
 ```
 
+`POSTGRES_PORT` をずらしているなら、URL のポートもそれに合わせる（5433 なら `localhost:5433`）。
+
 `TEST_DATABASE_URL` が空のときは skip する（DB の無い環境でも `go test ./...` が
 通るようにするため）。スキーマはテストの開始時に `db.Up` で適用するので、
 マイグレーションを足したときも手当ては要らない。
@@ -129,7 +146,8 @@ JWT を受け取り、`Authorization: Bearer <token>` で渡す。トークン�
 - ログイン失敗は「email が無い」「パスワードが違う」を区別せず、同じ 401 を返す（email の列挙を防ぐ）
 - `user_id` はリクエストでは受け取らず、作成時にトークンの `sub` から入れる（DB では NOT NULL）
 - `entries` はすべて自分の記録だけが対象。一覧は自分の分だけ返し、id を指定する取得・更新・削除は
-  他人の id を「存在しない」と同じ 404 にする（403 で分けると、その id があることが外から分かる）
+  他人の id を「存在しない」と同じ 404 にする（403 だと、その id が存在することが分かってしまう。
+  404 なら、あるかどうかを判断できない）
 - 000003 で `user_id` を NOT NULL にした。それより前に作られた `user_id` が NULL の行
   （誰からも見えなくなる）は、このマイグレーションで消える
 
@@ -144,8 +162,9 @@ DSL では `JWTSecurity("jwt")` を定義し、`entries` サービスと `users.
 レスポンスの `tags` は名前順で、無ければ `[]`。
 
 `tags` サービスは一覧（`GET /tags`、件数付き・名前順）・改名（`PUT /tags/{id}`、全記録に反映）・
-削除（`DELETE /tags/{id}`、紐付けごと消え、記録は残る）の 3 つ。作成は entries 経由で暗黙に行うので
-`POST /tags` は無い。紐付けの無くなったタグは 0 件のまま残る（消したければ delete）。
+削除（`DELETE /tags/{id}`、紐付けごと消え、記録は残る）の 3 つ。`POST /tags` は無い。
+要件に「タグを追加で作る」が無いため（タグは entries の `tags` に名前を書いたときに作られる）。
+紐付けの無くなったタグは 0 件のまま残る（消したければ delete）。
 
 - 名前は 1〜50 文字、前後に空白なし、大文字小文字は区別する。同じユーザの中で一意で、既にある名前への改名は 409
 - テーブルは `tags`（`user_id` + `name` で一意）と `entry_tags`（中間テーブル、双方向に CASCADE）。
@@ -196,7 +215,7 @@ TOKEN=$(curl -s -H 'Content-Type: application/json' localhost:8080/users/login \
 curl -H "Authorization: Bearer $TOKEN" localhost:8080/users/me
 
 # 作成（id・created_at・updated_at はサーバー側で付与。Location ヘッダに新リソースのパスが入る）
-# user_id はリクエストでは受け取らず、トークンの sub から入る。tags は任意で、名前順に返る
+# tags は任意で、名前順に返る
 curl -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' localhost:8080/entries \
   -d '{"title":"Goa入門","entry_date":"2026-08-31","kind":"til","body":"本文","tags":["goa","go"]}'
 
@@ -303,13 +322,7 @@ AWS 側の構成は `terraform/` にある。W1〜W2 でコンソールと CLI �
 そのまま Terraform に書き起こし（life#40）、W4 で ALB を前に置き（life#48）、
 デフォルト VPC から独自 VPC に移した（life#49）。VPC はパブリックサブネット 2 つだけで、
 ALB / ECS タスク / RDS を全部そこに置く。
-外からの入口は ALB の 80 だけで、api の 8080 には ALB の SG からしか届かない。
-
-```
-[誰でも] --80--> ALB (life-api) --8080--> ECS Fargate (life-api) --5432--> RDS PostgreSQL (life-db)
-                                              ↑ pull                ↑ DATABASE_URL / JWT_SECRET
-                                             ECR              SSM Parameter Store
-```
+外からの入口は ALB の 80 だけで、api の 8080 には ALB の SG からしか届かない（構成図は冒頭の「構成」）。
 
 | ファイル | 中身 |
 | --- | --- |
@@ -325,6 +338,9 @@ ALB / ECS タスク / RDS を全部そこに置く。
 
 ### 使い方
 
+前提: AWS CLI v2 と `life` プロファイル（VPC / ELB / ECS / ECR / RDS / IAM / SSM / Logs を作れる権限）、
+Terraform（`mise install` で入る）、Docker、打鍵用に `jq`。
+
 ```sh
 export AWS_PROFILE=life
 cd terraform
@@ -333,11 +349,20 @@ terraform plan
 terraform apply                                 # RDS 込みで 5〜10 分かかる
 ```
 
+**初めて立てるときは次の順で通す。** apply の直後は ECR が空なので、イメージを push するまで
+migrate も api も起動できない（`CannotPullContainerError`）。サービスは desired 0 で作られるので、
+apply 自体は ECR が空でも通る。
+
+1. `terraform apply`（上）
+2. 「イメージの更新」で build / push（最後の `--force-new-deployment` は desired 0 なので省いてよい）
+3. 「スキーマ適用と起動・停止」で migrate → desired 1 → `/health`
+4. 「打鍵確認（curl）」の `localhost:8080` を `$(terraform output -raw api_url)` に読み替えて打鍵
+5. desired 0 に戻し、`-var db_enabled=false` で RDS を消す
+
 state は手元の `terraform.tfstate`（gitignore 済み）。DB のパスワードが平文で入るので、
 リポジトリにもイメージにも入れない（`.dockerignore` で `terraform/` ごと外している）。
 
-`terraform.tfvars` は要らない。ALB を立てるまでは自宅 IP を `api_allowed_cidrs` に書いて
-8080 を開けていたが、入口が ALB になったので life#48 で変数ごと外した。
+`terraform.tfvars` は要らない（渡す変数が無い。既定値のままで通る）。
 
 ### スキーマ適用と起動・停止
 
@@ -361,8 +386,22 @@ terraform apply -var db_enabled=false           # RDS と接続文字列を消�
 
 URL は `terraform output -raw api_url`（`http://<ALB の DNS 名>`）。タスクを起動し直しても変わらないので、
 「打鍵確認（curl）」の `localhost:8080` をこれに読み替えればそのまま通る。
-タスクのパブリック IP は起動のたびに変わるうえ、8080 には ALB の SG からしか届かないので、
-IP を引いて直接叩く手順は無くした。
+タスクのパブリック IP を直接叩く経路は無い（8080 には ALB の SG からしか届かない）。
+
+### RDS を使わない間は消す判断
+
+- **止めるのではなく消す。** これもキャッチアップのための環境で、停止では費用がかかるので、使わない間は常に削除する。
+  停止中もストレージ（20GB gp3 で $2.76/月）とバックアップの課金は続き、止めても 7 日で勝手に起動する
+  （気づかなければ $0.025/時がそのまま乗る）
+- 消すときにスナップショットは残さない（残すと課金が続く）ので、データは毎回無くなる。
+  次に使うときは `terraform apply`（5〜10 分）で空の DB を作り直し、スキーマ適用からやり直す
+
+### 接続文字列と JWT の鍵を SSM に置く判断
+
+- **無料で足りるので SSM にした。** Standard の SecureString は無料で、Secrets Manager は 1 件 $0.40/月。
+  Secrets Manager の売りは自動ローテーションだが、ここでは使っていない
+- タスク定義には `environment` ではなく `secrets` で渡す。タスク定義の JSON に載るのはパラメータ名だけで、
+  値は起動時に実行ロールが SSM から引く（`environment` だと平文がタスク定義に残る）
 
 ### ALB を前に置いたときの判断（life#48）
 
@@ -371,7 +410,7 @@ IP を引いて直接叩く手順は無くした。
   寄せてあり、VPC を移すときはそこを差し替えるだけで、SG / ECS / RDS / ALB のファイルは触らない
 - **入口は SG の参照で連鎖させる。** CIDR で開けるのは ALB の 80 だけ。api の 8080 は ALB の SG から、
   RDS の 5432 は api の SG から。ALB のノードやタスクの IP が変わっても効く。
-  タスクのパブリック IP は残す（NAT を持たないので、ECR / SSM / ログへの出口として要る）が、入口としては使えない
+  タスクのパブリック IP は出口として残す（理由は下の「独自 VPC に移したときの判断」）が、入口としては使えない
 - **HTTP のみ。** HTTPS と独自ドメインは goals に無い。証明書と Route 53 が要るので、必要になったときに足す
 - **ヘルスチェックは `/health`。** DB への疎通も見るので、DB に繋がらないタスクは 503 で外れる。
   起動時に DB へ繋ぎに行く分、サービスに `health_check_grace_period_seconds = 60` の猶予を付けた。
@@ -390,11 +429,15 @@ VPC life  10.0.0.0/16（DNS 解決・ホスト名 有効）
 ```
 
 - **パブリックサブネットだけ。プライベートサブネットも NAT ゲートウェイも VPC エンドポイントも持たない。**
+  このサービスは自分一人が趣味で使うもので、本番運用は考えていない。個人で使うので、費用は極力抑えたい。
   タスクをプライベートに置くと、ECR の pull / SSM / CloudWatch Logs への出口が別に要る。
-  NAT ゲートウェイは ~$0.062/時（月 45 ドル）+ 転送量、VPC エンドポイントは ecr.api / ecr.dkr / ssm / logs の
-  4 つ × AZ 数で、1 AZ に絞っても ~$0.056/時。どちらも ALB（~$0.03/時）より高い。
+  NAT ゲートウェイは $0.062/時（月 45 ドル）+ 転送量、VPC エンドポイントは ecr.api / ecr.dkr / ssm / logs の
+  4 つ × AZ 数で、1 AZ に絞っても $0.056/時。どちらも ALB（パブリック IPv4 込みで ~$0.034/時）より高い。
   入口は SG で ALB だけに絞れていて、タスクにパブリック IP が付いていても直接は叩けない（09/15 に 8080 直叩きの
-  タイムアウトを確認済み）。「タスクを外から隠す」ためだけに ALB より高いものを持つのは、学習目的とコストの釣り合いが取れない
+  タイムアウトを確認済み）。
+  これが本番なら、タスクと RDS をプライベートサブネットに置き、NAT かエンドポイントを持つ
+- **W1 はデフォルト VPC で始めた。** とりあえず、ありものを使いたかった（VPC / パブリックサブネット / IGW / ルートが
+  最初から揃っていて、ネットワークを何も書かずにタスクを置ける）
 - **構成はデフォルト VPC と同じで、自分で書いただけ。** サブネットは 2 つ（ALB が 2 AZ 以上を要求する。デフォルト VPC は
   1a / 1c / 1d の 3 つだった）。CIDR は 10.0.0.0/16（デフォルトの 172.31.0.0/16 と重ならない）。
   DNS 解決とホスト名はデフォルト VPC と同じく有効にした。解決は ECR / SSM / RDS の名前を VPC 内から引くのに要り、
@@ -441,11 +484,13 @@ aws ecs update-service --cluster life --service life-api --force-new-deployment
 
 | リソース | 目安 | 止め方 |
 | --- | --- | --- |
-| ALB | ~$0.03/時（~$20/月）+ LCU | 消すしかない（DNS 名が変わる）。W4 の間は残す |
+| ALB | $0.0243/時 + パブリック IPv4 2 個（$0.005/時 × 2 AZ）= ~$0.034/時（~$25/月）+ LCU | 消すしかない（DNS 名が変わる）。W4 の間は残す |
 | VPC / サブネット / IGW / ルートテーブル | 0 | - （NAT ゲートウェイと VPC エンドポイントは持たない） |
-| RDS db.t4g.micro + 20GB gp3 | ~$0.02/時（~$15/月） | `-var db_enabled=false` で消す |
-| Fargate 0.25 vCPU / 0.5 GB | ~$0.02/時 | desired 0（既定） |
+| RDS db.t4g.micro + 20GB gp3 | $0.025/時 + ストレージ $2.76/月（~$21/月） | `-var db_enabled=false` で消す |
+| Fargate 0.25 vCPU / 0.5 GB | ~$0.015/時 + タスクのパブリック IPv4 $0.005/時 | desired 0（既定） |
 | ECR / ログ / SSM Standard | ほぼ 0 | - |
+
+単価は ap-northeast-1 のオンデマンド（2026-09-19 に AWS Pricing API で確認）。
 
 ## 関連
 
