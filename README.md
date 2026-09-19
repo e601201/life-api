@@ -357,7 +357,7 @@ apply 自体は ECR が空でも通る。
 2. 「イメージの更新」で build / push（最後の `--force-new-deployment` は desired 0 なので省いてよい）
 3. 「スキーマ適用と起動・停止」で migrate → desired 1 → `/health`
 4. 「打鍵確認（curl）」の `localhost:8080` を `$(terraform output -raw api_url)` に読み替えて打鍵
-5. desired 0 に戻し、`-var db_enabled=false` で RDS を消す
+5. desired 0 に戻し、`-var db_enabled=false` で RDS を、`destroy -target=aws_lb.api` で ALB を消す
 
 state は手元の `terraform.tfstate`（gitignore 済み）。DB のパスワードが平文で入るので、
 リポジトリにもイメージにも入れない（`.dockerignore` で `terraform/` ごと外している）。
@@ -377,6 +377,7 @@ aws ecs update-service --cluster life --service life-api --desired-count 1   # a
 curl "$(terraform output -raw api_url)/health"  # ALB 経由。ターゲットが healthy になるまで 1 分ほど
 aws ecs update-service --cluster life --service life-api --desired-count 0   # 確認が済んだら止める
 terraform apply -var db_enabled=false           # RDS と接続文字列を消す（ECR / ECS / SG / IAM / ALB は残る）
+terraform destroy -target=aws_lb.api -var db_enabled=false   # ALB も消す（リスナーと ECS サービスも一緒に消える）。この順で。先に消すと上の apply が ALB を作り直す
 ```
 
 **desired count は Terraform の変数（既定 0）で持ち、起動と停止は CLI でやる。**
@@ -415,8 +416,10 @@ URL は `terraform output -raw api_url`（`http://<ALB の DNS 名>`）。タス
 - **ヘルスチェックは `/health`。** DB への疎通も見るので、DB に繋がらないタスクは 503 で外れる。
   起動時に DB へ繋ぎに行く分、サービスに `health_check_grace_period_seconds = 60` の猶予を付けた。
   ターゲットの登録解除は 30 秒（既定の 300 秒だと desired 0 に戻すときに待たされる）
-- **トグルは付けない。** 立てた瞬間から課金されるが、消すと DNS 名が変わって渡した URL が死ぬ。
-  W4 の間は立てたままにし、残すかは週末に決める
+- **使わない間は ALB も消す。** 立てている間は課金され続ける（月 ~25 ドル）。お金を払いたくないので、RDS と同じく消す。
+  消すと DNS 名が変わるので、URL は立てるたびに `terraform output -raw api_url` で引き直す。
+  トグルの変数は付けておらず、`terraform destroy -target=aws_lb.api` で消す。リスナーと、リスナーに `depends_on` している
+  ECS サービスも一緒に消え、次の `terraform apply` で 3 つとも戻る（ターゲットグループと SG は残る。課金は無い）
 - **サービスに `load_balancer` を後から付けても作り直しにはならない。** issue では作り直しを見込んで desired 0 の
   タイミングで足したが、provider 6.x の plan は `update in-place`（`health_check_grace_period_seconds` も同時に in-place）だった
 
@@ -484,7 +487,7 @@ aws ecs update-service --cluster life --service life-api --force-new-deployment
 
 | リソース | 目安 | 止め方 |
 | --- | --- | --- |
-| ALB | $0.0243/時 + パブリック IPv4 2 個（$0.005/時 × 2 AZ）= ~$0.034/時（~$25/月）+ LCU | 消すしかない（DNS 名が変わる）。W4 の間は残す |
+| ALB | $0.0243/時 + パブリック IPv4 2 個（$0.005/時 × 2 AZ）= ~$0.034/時（~$25/月）+ LCU | `terraform destroy -target=aws_lb.api` で消す（DNS 名が変わる）。使わない間は消しておく |
 | VPC / サブネット / IGW / ルートテーブル | 0 | - （NAT ゲートウェイと VPC エンドポイントは持たない） |
 | RDS db.t4g.micro + 20GB gp3 | $0.025/時 + ストレージ $2.76/月（~$21/月） | `-var db_enabled=false` で消す |
 | Fargate 0.25 vCPU / 0.5 GB | ~$0.015/時 + タスクのパブリック IPv4 $0.005/時 | desired 0（既定） |

@@ -3,8 +3,9 @@
 # （ALB の DNS 名）が要る。HTTPS と独自ドメインは持たない（goals に無い）ので、
 # リスナーは 80 の HTTP だけ。
 #
-# 立てた瞬間から課金される（~$0.03/時、~$20/月）。トグルは付けない。desired 0 のときも
-# ALB は残り、ターゲットが無い状態でヘルスチェックが空振りするだけ。
+# 立てている間は課金される（パブリック IPv4 2 個込みで ~$0.034/時、~$25/月）。desired 0 のときも
+# ALB は残り、ターゲットが無い状態でヘルスチェックが空振りするだけなので、使わない間は消す。
+# トグルの変数は付けず、terraform destroy -target=aws_lb.api で消す（README の #48 の節）。
 resource "aws_lb" "api" {
   name               = "life-api"
   load_balancer_type = "application"

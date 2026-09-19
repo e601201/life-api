@@ -99,12 +99,13 @@ aws ec2 describe-security-groups --filters Name=vpc-id,Values=vpc-0f17b1e883bdd5
 cd ~/workspace/life-api/terraform && export AWS_PROFILE=life
 # コードを変えていれば、先に README の「イメージの更新」で build / push。
 # migration はバイナリ埋め込みなので、イメージが古いと新しいスキーマも入らない（09/14）
-terraform apply                                 # RDS と SSM が戻る（既定 db_enabled=true）
+terraform apply                                 # RDS と SSM、ALB・リスナー・ECS サービスが戻る（既定 db_enabled=true）
 terraform output -raw migrate_command | sh      # 空の DB なのでスキーマ適用から
 aws ecs update-service --cluster life --service life-api --desired-count 1   # 起動（state の desired は 0 のまま）
 curl "$(terraform output -raw api_url)/health"  # ALB 経由。healthy になるまで 1 分ほど
 aws ecs update-service --cluster life --service life-api --desired-count 0   # 確認後 0 に戻す
 terraform apply -var db_enabled=false           # 終わったら RDS を消す
+terraform destroy -target=aws_lb.api -var db_enabled=false   # ALB も消す（09/19 から。リスナーと ECS サービスも一緒に消える）。RDS のあとに流す
 ```
 
-URL は ALB の DNS 名で固定なので、自宅の IP が変わっても直すものは無い。
+ALB を毎回作り直すので、URL（`api_url`）は立てるたびに変わる。自宅の IP が変わっても直すものは無い。
