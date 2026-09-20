@@ -91,6 +91,31 @@ aws ec2 describe-security-groups --filters Name=vpc-id,Values=vpc-0f17b1e883bdd5
   --query 'SecurityGroups[].GroupName'                                 # デフォルト VPC に default だけ残っていること
 ```
 
+## 実行ロールの名前を変えて通し確認したとき（life#51、2026-09-20）
+
+plan は「10 to add, 0 to change, 5 to destroy」。前日に消した ALB / リスナー / ECS サービスと、RDS / 接続文字列が add。
+実行ロールの名前を `ecsTaskExecutionRole` から `life-api-task-execution` に変えたので、ロールとポリシー 2 つ、
+ロールの ARN を持つタスク定義 2 つが作り直しになる。
+
+```sh
+terraform plan -out=/tmp/51-up.tfplan && terraform apply /tmp/51-up.tfplan
+# README「イメージの更新」で build / push（#50 のログの変更を ECR に載せる。ECR は既にあるので apply の前でも後でもよい）
+terraform output -raw migrate_command | sh                             # 20:53、exit 0、migrated: version 4（新しいロールで pull / SSM / ログが通った）
+aws ecs update-service --cluster life --service life-api --desired-count 1
+aws ecs wait services-stable --cluster life --services life-api
+bash ../scripts/smoke.sh "$(terraform output -raw api_url)"            # 20:55、34 項目 ok
+# README「ログ」の start-query（life#50 で残していた確認）: user_id = 1 and status >= 400 で 404 / 409 の 3 行、
+# request_id は ALB の Root=1-...。バリデーション違反の 400 には user_id が付かない（JWTAuth より先に弾かれる）
+aws ecs update-service --cluster life --service life-api --desired-count 0
+terraform plan -destroy -target=aws_lb.api -target=aws_db_instance.life -var db_enabled=false -out=/tmp/51-down.tfplan   # 5 to destroy
+terraform apply /tmp/51-down.tfplan                                    # 21:31、5 destroyed（RDS は 1 分 51 秒、ALB は 17 秒）
+```
+
+削除は 3 回目で通った。1 回目は `AWS_PROFILE=life` を付け忘れ（No valid credential sources）、2 回目は計画ファイルが
+削除を含まない計画で上書きされていて何も消えず（同じパスに `terraform plan -out=` を流すと上書きされる。apply の前に
+`terraform show <計画ファイル>` で「5 to destroy」を確かめられる）、別名で作り直して通した。
+mise が効いていないシェルでは terraform が 1.7.2 になり、1.16.2 で作った計画ファイルを読めない（`mise exec -- terraform`）。
+
 ## 次に AWS で動かすとき
 
 1 と 4 は要らないので短くなる。
@@ -104,8 +129,9 @@ terraform output -raw migrate_command | sh      # 空の DB なのでスキー�
 aws ecs update-service --cluster life --service life-api --desired-count 1   # 起動（state の desired は 0 のまま）
 curl "$(terraform output -raw api_url)/health"  # ALB 経由。healthy になるまで 1 分ほど
 aws ecs update-service --cluster life --service life-api --desired-count 0   # 確認後 0 に戻す
-terraform apply -var db_enabled=false           # 終わったら RDS を消す
-terraform destroy -target=aws_lb.api -var db_enabled=false   # ALB も消す（09/19 から。リスナーと ECS サービスも一緒に消える）。RDS のあとに流す
+terraform destroy -target=aws_lb.api -target=aws_db_instance.life -var db_enabled=false   # 終わったら RDS と ALB を消す（5 to destroy）
 ```
+
+打鍵は `bash ../scripts/smoke.sh "$(terraform output -raw api_url)"`（34 項目）でまとめて流せる。
 
 ALB を毎回作り直すので、URL（`api_url`）は立てるたびに変わる。自宅の IP が変わっても直すものは無い。

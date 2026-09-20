@@ -184,12 +184,16 @@ DSL では `JWTSecurity("jwt")` を定義し、`entries` サービスと `users.
 | `from=2026-09-01` / `to=2026-09-30` | 記録日（`entry_date`）の範囲。両端を含む。片方だけでもよい |
 
 - 期間は `entry_date`（日付）だけで見る。`created_at` は timestamptz で、Fargate（UTC）とローカル（+09:00）で
-  日付の境界がずれるため検索には使わない（09/05 の気づき）
+  日付の境界がずれるため検索には使わない
 - `q` は PostgreSQL の全文検索（tsvector）ではなく `ILIKE` の部分一致。tsvector は日本語を分かち書き
   できない。1 人分の記録量なら `user_id` で絞ったあとの走査で足りるので、インデックスも張っていない
 - 値が空のパラメータ（`?q=`）は Goa が未指定として扱う。`from > to` は 400 ではなく空の一覧
 
 ### 打鍵確認（curl）
+
+まとめて流すなら `bash scripts/smoke.sh [URL]`（既定は `http://localhost:8080`）。下の curl と同じ内容を
+ステータスコードで判定し、他人の id が 404 になることも 2 人目のユーザで確かめる。実行のたびにユーザを 2 人登録し、
+記録とタグは最後に消す（ユーザは残る。削除の API が無い）。
 
 entries の CRUD は `entries` テーブルへの読み書き（`entries.go`）。プロセスを再起動しても
 データは残る。一覧は自分の記録を記録日の新しい順（同じ日なら id の降順）で、**既定 10 件**返す。
@@ -281,10 +285,17 @@ start / end の 2 行で request id も自前の乱数だったので差し替�
 | キー | 中身 |
 | --- | --- |
 | `request_id` | ALB が付ける `X-Amzn-Trace-Id`（`Root=1-<時刻の hex>-<乱数>`）。ALB を通らないとき（ローカル・テスト）は自前の乱数。同じリクエストの中で出る他の行（`users.login`、`ERROR id=...`）にも同じ値が付く |
-| `method` / `path` | クエリ文字列は含めない（検索語が入る） |
+| `method` / `path` | クエリ文字列は含めない |
 | `status` / `duration_ms` / `bytes` | レスポンスのステータス・所要時間（ミリ秒）・書いたバイト数 |
-| `remote_addr` | クライアントの IP。`X-Forwarded-For` の末尾（ALB が足した値。先頭側はクライアントが書ける）、無ければ接続元 |
-| `user_id` | JWT の `sub`。`JWTAuth` を通ったリクエストにだけ付く（401 や `POST /users/login` には無い）。サービスの行にも付く |
+| `remote_addr` | クライアントの IP。`X-Forwarded-For` の末尾、無ければ接続元 |
+| `user_id` | JWT の `sub`。`JWTAuth` を通ったリクエストにだけ付く（401 や `POST /users/login` には無い。バリデーション違反の 400 にも無い。Goa はリクエストのデコードと検証を `JWTAuth` より先にやるため）。サービスの行にも付く |
+
+- **request id は ALB の `X-Amzn-Trace-Id`。** ALB がリクエストを受けた時点で付けるので、ALB のアクセスログと
+  アプリのログを同じ ID で突き合わせられる（ALB のアクセスログは今は取っていない）
+- **クエリ文字列は出さない。** 漏洩の危険を排除するため（検索語が入る）。今後の要件で必要になれば、
+  特定のパラメータだけ許可リストで出す形にする
+- **`remote_addr` は `X-Forwarded-For` の末尾。** 末尾は、直前の信頼できるプロキシ（ALB）が実際に観測した値なので
+  偽装できない（先頭側はクライアントが書ける）
 
 パスワード・トークン本体・リクエストボディは出さない（`-debug` のときだけ `debug.HTTP` がボディを
 別の行に出す。`users` はそこでも対象外）。ハンドラが panic したときは `status` 500 と `panic: true` で
@@ -298,6 +309,9 @@ fields @timestamp, method, path, status, duration_ms, request_id
 | sort @timestamp desc
 | limit 50
 ```
+
+ALB のヘルスチェックが 30 秒ごとに `/health` を叩くので、全体を眺めるときは `path != "/health"` を足す。
+AWS 上で 2026-09-20 に確認済み（`user_id = 1 and status >= 400` で 404 / 409 の行だけが返り、`request_id` は ALB の `Root=1-...`）。
 
 CLI からは `start-query` → `get-query-results`（結果が揃うまで数秒。`status` が `Complete` になるまで叩き直す）:
 
@@ -331,7 +345,7 @@ ALB / ECS タスク / RDS を全部そこに置く。
 | `ecs.tf` | クラスタ `life`、タスク定義 `life-api` / `life-migrate`、サービス `life-api`（起動したタスクをターゲットグループに登録） |
 | `rds.tf` / `ssm.tf` | RDS `life-db`（db.t4g.micro）と、SSM パラメータ `/life-api/database-url`（接続文字列）/ `/life-api/jwt-secret`（JWT の署名鍵。Terraform が生成し、api にだけ渡す） |
 | `sg.tf` | SG `life-api-alb`（80 は全開、出口は api の 8080 だけ）/ `life-api-ecs`（8080 は ALB の SG からだけ）/ `life-api-rds`（5432 は api の SG からだけ） |
-| `iam.tf` | タスク実行ロール `ecsTaskExecutionRole`（ECR pull / ログ / SSM 読み取り） |
+| `iam.tf` | タスク実行ロール `life-api-task-execution`（ECR pull / ログ / SSM 読み取り）。ECS のコンソールが自動で作る `ecsTaskExecutionRole` とは別の名前にしてある（同名だと、既にあるアカウントで apply が落ちる） |
 | `logs.tf` | ロググループ `/ecs/life-api`（30 日で消す）。中身の形は上の「ログ」の節 |
 | `vpc.tf` | VPC `life`（10.0.0.0/16）、パブリックサブネット `life-public-a` / `life-public-c`、IGW、0.0.0.0/0 を IGW に向けたルートテーブル |
 | `data.tf` | アカウント ID と、ネットワークの参照を 1 箇所に寄せた locals（`vpc_id` / `public_subnet_ids`）。SG / ECS / RDS / ALB はここ経由で VPC を見る |
@@ -356,8 +370,8 @@ apply 自体は ECR が空でも通る。
 1. `terraform apply`（上）
 2. 「イメージの更新」で build / push（最後の `--force-new-deployment` は desired 0 なので省いてよい）
 3. 「スキーマ適用と起動・停止」で migrate → desired 1 → `/health`
-4. 「打鍵確認（curl）」の `localhost:8080` を `$(terraform output -raw api_url)` に読み替えて打鍵
-5. desired 0 に戻し、`-var db_enabled=false` で RDS を、`destroy -target=aws_lb.api` で ALB を消す
+4. `bash scripts/smoke.sh "$(terraform -chdir=terraform output -raw api_url)"` で打鍵（中身は「打鍵確認（curl）」と同じ）
+5. desired 0 に戻し、RDS と ALB を消す（「スキーマ適用と起動・停止」の最後の行）
 
 state は手元の `terraform.tfstate`（gitignore 済み）。DB のパスワードが平文で入るので、
 リポジトリにもイメージにも入れない（`.dockerignore` で `terraform/` ごと外している）。
@@ -367,7 +381,7 @@ state は手元の `terraform.tfstate`（gitignore 済み）。DB のパスワ�
 ### スキーマ適用と起動・停止
 
 DB は空で作られるので、最初に `life-migrate up` を Fargate の単発タスクとして流す。
-VPC 内から RDS に繋ぐので、09/05 のように自宅 IP を RDS の SG に開ける必要はない。
+VPC 内から RDS に繋ぐので、自宅 IP を RDS の SG に開ける必要はない。
 
 ```sh
 terraform output -raw migrate_command | sh      # 単発タスクを起動（終了コード 0 で成功）
@@ -376,13 +390,14 @@ aws logs tail /ecs/life-api --log-stream-name-prefix migrate --since 10m   # ロ
 aws ecs update-service --cluster life --service life-api --desired-count 1   # api を 1 タスク起動
 curl "$(terraform output -raw api_url)/health"  # ALB 経由。ターゲットが healthy になるまで 1 分ほど
 aws ecs update-service --cluster life --service life-api --desired-count 0   # 確認が済んだら止める
-terraform apply -var db_enabled=false           # RDS と接続文字列を消す（ECR / ECS / SG / IAM / ALB は残る）
-terraform destroy -target=aws_lb.api -var db_enabled=false   # ALB も消す（リスナーと ECS サービスも一緒に消える）。この順で。先に消すと上の apply が ALB を作り直す
+terraform destroy -target=aws_lb.api -target=aws_db_instance.life -var db_enabled=false   # RDS と ALB を消す（5 to destroy）
+# 一緒に消えるもの: 接続文字列（SSM）、リスナー、ECS サービス。残るもの: ECR / タスク定義 / SG / IAM / VPC / ターゲットグループ（課金なし）
+# RDS だけ消して ALB を残すなら terraform apply -var db_enabled=false
 ```
 
 **desired count は Terraform の変数（既定 0）で持ち、起動と停止は CLI でやる。**
 `terraform apply -var api_desired_count=1` でも起動できるが、CLI なら state の desired が 0 のままなので、
-止めたあとの `terraform plan` に差分が出ない（09/14）。CLI で 1 にしても次の `terraform apply` で 0 に戻る。
+止めたあとの `terraform plan` に差分が出ない。CLI で 1 にしても次の `terraform apply` で 0 に戻る。
 「使い終わったら止める」を既定にするための挙動なので、そのまま使う。
 
 URL は `terraform output -raw api_url`（`http://<ALB の DNS 名>`）。タスクを起動し直しても変わらないので、
@@ -411,14 +426,18 @@ URL は `terraform output -raw api_url`（`http://<ALB の DNS 名>`）。タス
   寄せてあり、VPC を移すときはそこを差し替えるだけで、SG / ECS / RDS / ALB のファイルは触らない
 - **入口は SG の参照で連鎖させる。** CIDR で開けるのは ALB の 80 だけ。api の 8080 は ALB の SG から、
   RDS の 5432 は api の SG から。ALB のノードやタスクの IP が変わっても効く。
+  サブネットの CIDR ごと開ける手もあるが、それだと同じサブネットにいる別のリソースからも 8080 に届いてしまい、
+  意図は「ALB からだけ」なのに実際の許可範囲が広くなる。
   タスクのパブリック IP は出口として残す（理由は下の「独自 VPC に移したときの判断」）が、入口としては使えない
 - **HTTP のみ。** HTTPS と独自ドメインは goals に無い。証明書と Route 53 が要るので、必要になったときに足す
 - **ヘルスチェックは `/health`。** DB への疎通も見るので、DB に繋がらないタスクは 503 で外れる。
+  DB なしでは何も返せないサービスなので、DB 疎通込みでよい。
   起動時に DB へ繋ぎに行く分、サービスに `health_check_grace_period_seconds = 60` の猶予を付けた。
   ターゲットの登録解除は 30 秒（既定の 300 秒だと desired 0 に戻すときに待たされる）
 - **使わない間は ALB も消す。** 立てている間は課金され続ける（月 ~25 ドル）。お金を払いたくないので、RDS と同じく消す。
   消すと DNS 名が変わるので、URL は立てるたびに `terraform output -raw api_url` で引き直す。
-  トグルの変数は付けておらず、`terraform destroy -target=aws_lb.api` で消す。リスナーと、リスナーに `depends_on` している
+  トグルの変数は付けておらず、`terraform destroy -target=aws_lb.api`（RDS と一緒に消すコマンドは
+  「スキーマ適用と起動・停止」）で消す。リスナーと、リスナーに `depends_on` している
   ECS サービスも一緒に消え、次の `terraform apply` で 3 つとも戻る（ターゲットグループと SG は残る。課金は無い）
 - **サービスに `load_balancer` を後から付けても作り直しにはならない。** issue では作り直しを見込んで desired 0 の
   タイミングで足したが、provider 6.x の plan は `update in-place`（`health_check_grace_period_seconds` も同時に in-place）だった
@@ -436,7 +455,7 @@ VPC life  10.0.0.0/16（DNS 解決・ホスト名 有効）
   タスクをプライベートに置くと、ECR の pull / SSM / CloudWatch Logs への出口が別に要る。
   NAT ゲートウェイは $0.062/時（月 45 ドル）+ 転送量、VPC エンドポイントは ecr.api / ecr.dkr / ssm / logs の
   4 つ × AZ 数で、1 AZ に絞っても $0.056/時。どちらも ALB（パブリック IPv4 込みで ~$0.034/時）より高い。
-  入口は SG で ALB だけに絞れていて、タスクにパブリック IP が付いていても直接は叩けない（09/15 に 8080 直叩きの
+  入口は SG で ALB だけに絞れていて、タスクにパブリック IP が付いていても直接は叩けない（2026-09-15 に 8080 直叩きの
   タイムアウトを確認済み）。
   これが本番なら、タスクと RDS をプライベートサブネットに置き、NAT かエンドポイントを持つ
 - **W1 はデフォルト VPC で始めた。** とりあえず、ありものを使いたかった（VPC / パブリックサブネット / IGW / ルートが
@@ -455,11 +474,11 @@ VPC life  10.0.0.0/16（DNS 解決・ホスト名 有効）
 
 ### イメージの更新
 
-`--platform linux/amd64` と `--provenance=false` の 2 つは省かない（08/29・09/05 の TIL）。
+`--platform linux/amd64` と `--provenance=false` の 2 つは省かない。
 前者が無いと arm64 Mac のイメージになって Fargate で動かず、後者が無いとイメージが
 OCI index になってタグなしの実体が並ぶ。
 `${repo}` の波括弧も省かない。zsh は `$repo:latest` の `:l` を小文字化の修飾子と読み、
-タグが `life-apiatest`（`:latest` が消えて `atest` だけ残る）になって push が「repository が無い」で落ちる（09/14 の TIL）。
+タグが `life-apiatest`（`:latest` が消えて `atest` だけ残る）になって push が「repository が無い」で落ちる。
 
 ```sh
 repo=$(terraform -chdir=terraform output -raw ecr_repository_url)
@@ -471,14 +490,15 @@ aws ecs update-service --cluster life --service life-api --force-new-deployment
 
 ### 手作業からの移行で決めたこと
 
-- **import したもの**: ECR リポジトリ、ECS クラスタ、タスク実行ロール（管理ポリシーとインラインポリシー込み）、ロググループ。
+- **import したもの**: ECR リポジトリ、ECS クラスタ、タスク実行ロール（管理ポリシーとインラインポリシー込み。
+  当時の名前は `ecsTaskExecutionRole` で、あとで `life-api-task-execution` に作り直した）、ロググループ。
   import ブロック（`import.tf`）で宣言して最初の apply で state に入れた。取り込みが済めば不要なので
   ファイルは消してある（残すと、環境を作り直したときに「無いものを import しようとして」落ちる）
 - **作り直したもの**: サービスと SG。コンソールのウィザードが CloudFormation スタック
   `ECS-Console-V2-Service-life-api-service-0eeazhof-life-77a3fdf3` として作っていたため、
   import すると二重管理になる。Terraform では `life-api` / `life-api-ecs` と別名で作り、
   旧スタックは apply が通ったあとに `aws cloudformation delete-stack` で消した（サービスは desired 0 だったので何も止まらなかった）
-- **新規に作るもの**: RDS、SSM パラメータ（接続文字列・JWT の署名鍵）、DB 用 SG。09/05 に削除済みなので import するものが無い
+- **新規に作るもの**: RDS、SSM パラメータ（接続文字列・JWT の署名鍵）、DB 用 SG。手作業で作った RDS は削除済みだったので、import するものが無かった
 - **タスク定義は import しない**。リビジョンは不変なので、Terraform が新しいリビジョンを登録する。
   `life-api:1`〜`3` はそのまま残る（消したければ `deregister-task-definition`）
 - **AWS Budgets（月 $20）は含めない**。アプリの構成ではなくアカウントの設定なので、このリポジトリの外
@@ -489,7 +509,7 @@ aws ecs update-service --cluster life --service life-api --force-new-deployment
 | --- | --- | --- |
 | ALB | $0.0243/時 + パブリック IPv4 2 個（$0.005/時 × 2 AZ）= ~$0.034/時（~$25/月）+ LCU | `terraform destroy -target=aws_lb.api` で消す（DNS 名が変わる）。使わない間は消しておく |
 | VPC / サブネット / IGW / ルートテーブル | 0 | - （NAT ゲートウェイと VPC エンドポイントは持たない） |
-| RDS db.t4g.micro + 20GB gp3 | $0.025/時 + ストレージ $2.76/月（~$21/月） | `-var db_enabled=false` で消す |
+| RDS db.t4g.micro + 20GB gp3 | $0.025/時 + ストレージ $2.76/月（~$21/月） | ALB と一緒に `terraform destroy -target=...` で消す（RDS だけなら `-var db_enabled=false`） |
 | Fargate 0.25 vCPU / 0.5 GB | ~$0.015/時 + タスクのパブリック IPv4 $0.005/時 | desired 0（既定） |
 | ECR / ログ / SSM Standard | ほぼ 0 | - |
 

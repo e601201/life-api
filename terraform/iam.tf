@@ -1,8 +1,11 @@
 # タスク実行ロール。ECS エージェントがタスクを立ち上げるときに使う
 # （ECR から pull、ログの書き込み、SSM から秘密を引く）。
 # アプリ自身が AWS API を呼ぶわけではないので、タスクロールは付けていない。
+#
+# 名前は ecsTaskExecutionRole にしない。ECS のコンソールが自動で作るロールと同じ名前で、
+# 既にあるアカウントでは apply が EntityAlreadyExists で落ちる（life#51 で変えた）。
 resource "aws_iam_role" "task_execution" {
-  name = "ecsTaskExecutionRole"
+  name = "life-api-task-execution"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
